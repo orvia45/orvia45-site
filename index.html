@@ -3,34 +3,143 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ORVIA45 - La voie vers l'Or</title>
+<title>ORVIA45 - Présentation du projet</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Inter,system-ui,sans-serif;background:#0B0B0C;color:#fff;line-height:1.6}
-header{min-height:90vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:20px;background:radial-gradient(circle at 50% 30%,#d4af37 0%,#8a6d1b 25%,#0B0B0C 70%)}
-h1{font-size:64px;letter-spacing:8px;font-weight:900}
-header p{font-size:20px;margin-top:15px;opacity:.9}
-.btn{margin-top:35px;padding:16px 48px;background:#fff;color:#000;border-radius:999px;text-decoration:none;font-weight:800;letter-spacing:1px}
-section{padding:80px 20px;max-width:1000px;margin:auto;text-align:center}
-.card{background:#151517;border:1px solid #222;border-radius:20px;padding:30px;margin-top:20px}
-.gold{color:#d4af37}
-footer{padding:40px;opacity:.5;text-align:center;border-top:1px solid #222}
+body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#0B0E14;color:#E8EAF0;line-height:1.7}
+.gold{color:#D4AF37}
+.header{padding:20px 5%;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.5);border-bottom:1px solid #222;position:sticky;top:0;backdrop-filter:blur(10px)}
+.logo{font-weight:900;letter-spacing:3px;font-size:22px}
+.logo span{color:#D4AF37}
+.badge{background:#1a1f2e;border:1px solid #D4AF37;color:#D4AF37;padding:5px 12px;border-radius:20px;font-size:11px;letter-spacing:1px}
+.hero{padding:80px 5% 60px;text-align:center;background:radial-gradient(600px at 50% -10%, rgba(212,175,55,0.25), transparent)}
+.hero h1{font-size:48px;font-weight:900;line-height:1.1;margin-bottom:15px}
+.hero h1 span{color:#D4AF37}
+.hero p.subtitle{color:#9AA0B5;max-width:700px;margin:15px auto;font-size:16px}
+.disclaimer{max-width:900px;margin:25px auto;background:#151A28;border:1px solid #2a3147;border-left:4px solid #D4AF37;padding:16px 20px;border-radius:10px;font-size:13px;color:#AAB0C5}
+.container{max-width:1100px;margin:0 auto;padding:40px 5%}
+.section{margin:70px 0}
+.section h2{font-size:28px;margin-bottom:20px;border-left:4px solid #D4AF37;padding-left:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.card{background:#131824;border:1px solid #232A3D;padding:22px;border-radius:14px}
+.card h3{color:#D4AF37;margin-bottom:8px;font-size:16px}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;margin-top:10px}
+.tag.orange{background:#2a1f0f;color:#e5a663;border:1px solid #5a3a1a}
+.tag.grey{background:#1e2333;color:#8a90a8;border:1px solid #2e3650}
+.table{width:100%;border-collapse:collapse;background:#131824;border-radius:12px;overflow:hidden;margin-top:15px}
+.table th{background:#1a2032;color:#D4AF37;text-align:left;padding:12px 15px;font-size:13px}
+.table td{padding:12px 15px;border-top:1px solid #232A3D;font-size:14px}
+.steps{display:flex;flex-wrap:wrap;gap:15px;margin-top:15px}
+.step{flex:1;min-width:180px;background:#131824;border:1px solid #232A3D;padding:18px;border-radius:12px;text-align:center}
+.step b{display:block;color:#D4AF37;font-size:20px;margin-bottom:5px}
+.roadmap{border-left:2px solid #232A3D;padding-left:20px}
+.road{margin:20px 0;position:relative}
+.road:before{content:"";width:10px;height:10px;background:#D4AF37;border-radius:50%;position:absolute;left:-26px;top:5px}
+.warning{background:#1a1510;border:1px solid #5a3a1a;border-radius:12px;padding:20px;color:#d6b48a}
+.footer{border-top:1px solid #232A3D;padding:30px 5%;text-align:center;color:#6b7288;font-size:13px;margin-top:60px}
+.btn{display:inline-block;margin-top:25px;background:linear-gradient(90deg,#D4AF37,#B8962E);color:#000;padding:12px 28px;border-radius:30px;font-weight:800;text-decoration:none;letter-spacing:1px}
 </style>
 </head>
 <body>
-<header>
-<h1>ORVIA45</h1>
-<p>La voie vers l'Or - Investissement Clair et Actif</p>
-<a class="btn" href="#capital">COMMENCER</a>
-</header>
-<section id="capital">
-<h2 class="gold">Capital Actif</h2>
-<h3 style="font-size:32px;margin:20px 0">Votre patrimoine, notre expertise</h3>
-<div class="card">
-<p>Bienvenue sur ORVIA45. Votre plateforme d'investissement transparente et sécurisée.</p>
-<p style="margin-top:15px">Site en construction - Version officielle en cours.</p>
+<div class="header"><div class="logo">ORVIA<span>45</span></div><div class="badge">MAQUETTE DE DÉMONSTRATION</div></div>
+
+<div class="hero">
+<h1>ORVIA<span>45</span></h1>
+<p style="letter-spacing:4px;color:#D4AF37;font-weight:700;margin-bottom:10px">PRÉSENTATION DU PROJET</p>
+<p class="subtitle">Une plateforme numérique en cours de développement. Interface simple, espace personnel et information transparente.</p>
+<div class="disclaimer">
+<b style="color:#D4AF37">À propos de ce site :</b> Cette présentation expose la vision, les fonctionnalités envisagées et les prochaines étapes du projet ORVIA45. Elle ne constitue ni une offre publique d'investissement, ni une promesse de rendement, ni une invitation à déposer de l'argent.<br>
+<b>Statut actuel : le site est une maquette de démonstration.</b> Les dépôts, retraits, paiements, comptes financiers et commissions ne sont pas encore activés ni validés pour un usage réel.
 </div>
-</section>
-<footer>© 2026 ORVIA45 - Tous droits réservés</footer>
+<a class="btn" href="#fonctionnalites">VOIR LA MAQUETTE</a>
+</div>
+
+<div class="container">
+<div class="section">
+<h2>1. Présentation générale</h2>
+<div class="grid">
+<div class="card"><h3>Interface simple</h3>Proposer une interface claire et accessible sur PC et mobile.</div>
+<div class="card"><h3>Espace personnel</h3>Donner à chaque membre un espace pour consulter ses informations.</div>
+<div class="card"><h3>Transparence</h3>Présenter clairement les fonctionnalités et conditions d'utilisation.</div>
+<div class="card"><h3>Sécurité & Support</h3>Mettre en place un support d'assistance et une infrastructure fiable.</div>
+</div>
+</div>
+
+<div class="section" id="fonctionnalites">
+<h2>2. Fonctionnalités envisagées</h2>
+<table class="table">
+<tr><th>Fonction</th><th>Description prévue</th><th>État</th></tr>
+<tr><td>Inscription et connexion</td><td>Création d'un compte et accès sécurisé</td><td><span class="tag orange">À finaliser</span></td></tr>
+<tr><td>Tableau de bord</td><td>Vue d'ensemble du compte</td><td><span class="tag orange">Maquette</span></td></tr>
+<tr><td>Dépôt et retrait</td><td>Affichage après intégration d'un prestataire autorisé</td><td><span class="tag grey">Non actif</span></td></tr>
+<tr><td>Niveaux VIP</td><td>Présentation éventuelle des avantages</td><td><span class="tag grey">À définir</span></td></tr>
+<tr><td>Parrainage</td><td>Suivi des invitations et règles de recommandation</td><td><span class="tag orange">À valider</span></td></tr>
+<tr><td>Profil et assistance</td><td>Informations membre et contact support</td><td><span class="tag orange">À développer</span></td></tr>
+</table>
+<p style="margin-top:12px;font-size:12px;color:#8a90a8">Les fonctionnalités indiquées comme prévues ne sont pas encore disponibles. Leur présence dans la maquette ne signifie pas qu'une opération réelle peut être effectuée.</p>
+</div>
+
+<div class="section">
+<h2>3. Parcours membre envisagé</h2>
+<div class="steps">
+<div class="step"><b>1</b>Découverte<br><small>Consultation des règles et infos officielles</small></div>
+<div class="step"><b>2</b>Inscription<br><small>Création de compte lorsque le module sera prêt</small></div>
+<div class="step"><b>3</b>Espace personnel<br><small>Consultation du profil et rubriques activées</small></div>
+<div class="step"><b>4</b>Services<br><small>Utilisation des seuls services validés</small></div>
+<div class="step"><b>5</b>Assistance<br><small>Signalement et support</small></div>
+</div>
+</div>
+
+<div class="section">
+<h2>4. Programme de parrainage envisagé</h2>
+<table class="table">
+<tr><th>Niveau</th><th>Taux évoqué</th><th>Base envisagée</th></tr>
+<tr><td>Niveau 1</td><td>15%</td><td>Premier dépôt du filleul direct</td></tr>
+<tr><td>Niveau 2</td><td>5%</td><td>Premier dépôt niveau 2</td></tr>
+<tr><td>Niveau 3</td><td>3%</td><td>Premier dépôt niveau 3</td></tr>
+</table>
+<div class="disclaimer" style="margin-top:15px">Important : ces taux ne sont ni confirmés, ni configurés, ni payables. Leur éventuelle utilisation dépendra de la viabilité économique, de règles transparentes et d'une vérification juridique. Il ne s'agit pas d'un rendement garanti.</div>
+</div>
+
+<div class="section">
+<h2>5. Sécurité et transparence - Prérequis avant ouverture</h2>
+<div class="grid">
+<div class="card">Protection des comptes et mots de passe</div>
+<div class="card">Sécurisation des échanges et données personnelles</div>
+<div class="card">Règles de confidentialité et conditions d'utilisation</div>
+<div class="card">Historique compréhensible des opérations</div>
+<div class="card">Procédure de réclamation</div>
+<div class="card">Vérification prestataires et obligations légales</div>
+</div>
+</div>
+
+<div class="section">
+<h2>6. Feuille de route</h2>
+<div class="roadmap">
+<div class="road"><b>Phase 1 - Préparation</b> : Finaliser nom, contenu, pages - <i>Présentation cohérente</i></div>
+<div class="road"><b>Phase 2 - Dépôt du code</b> : Organiser fichiers dans GitHub - <i>Code sauvegardé</i> ✅</div>
+<div class="road"><b>Phase 3 - Mise en ligne de test</b> : Déployer version démo - <i>Site de test accessible</i> ✅ Nous sommes ici</div>
+<div class="road"><b>Phase 4 - Développement</b> : Comptes, base de données, admin</div>
+<div class="road"><b>Phase 5 - Vérifications</b> : Sécurité, prestataires, règles légales</div>
+<div class="road"><b>Phase 6 - Lancement éventuel</b> : Ouvrir uniquement fonctions validées</div>
+</div>
+</div>
+
+<div class="section">
+<div class="warning">
+<b>7. Ce que le projet n'est pas encore</b><br><br>
+À la date de cette présentation, ORVIA45 est un projet en cours de préparation et son site est une maquette de démonstration. Aucun service de dépôt ou de retrait réel n'est annoncé comme opérationnel. Aucun bénéfice, intérêt, revenu ou remboursement n'est garanti. Personne ne devrait envoyer d'argent sur la base de cette maquette.
+</div>
+</div>
+
+<div class="section" style="text-align:center">
+<h2>8. Conclusion</h2>
+<p>ORVIA45 ambitionne de devenir une plateforme numérique structurée, accessible et transparente. La priorité est de construire une base technique fiable, de préciser les services et de vérifier les exigences légales avant toute activité financière.</p>
+<br>
+<p style="color:#6b7288;font-size:13px">Contact et informations officielles seront ajoutés lorsque confirmés.</p>
+</div>
+</div>
+
+<div class="footer">© 2026 ORVIA45 - Projet en développement - Maquette de démonstration - Tous droits réservés<br>Version préliminaire - Octobre 2026</div>
 </body>
 </html>
