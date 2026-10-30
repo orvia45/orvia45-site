@@ -3,143 +3,83 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ORVIA45 - Présentation du projet</title>
+<title>ORVIA45 - Maquette Demo</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#0B0E14;color:#E8EAF0;line-height:1.7}
-.gold{color:#D4AF37}
-.header{padding:20px 5%;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.5);border-bottom:1px solid #222;position:sticky;top:0;backdrop-filter:blur(10px)}
-.logo{font-weight:900;letter-spacing:3px;font-size:22px}
-.logo span{color:#D4AF37}
-.badge{background:#1a1f2e;border:1px solid #D4AF37;color:#D4AF37;padding:5px 12px;border-radius:20px;font-size:11px;letter-spacing:1px}
-.hero{padding:80px 5% 60px;text-align:center;background:radial-gradient(600px at 50% -10%, rgba(212,175,55,0.25), transparent)}
-.hero h1{font-size:48px;font-weight:900;line-height:1.1;margin-bottom:15px}
-.hero h1 span{color:#D4AF37}
-.hero p.subtitle{color:#9AA0B5;max-width:700px;margin:15px auto;font-size:16px}
-.disclaimer{max-width:900px;margin:25px auto;background:#151A28;border:1px solid #2a3147;border-left:4px solid #D4AF37;padding:16px 20px;border-radius:10px;font-size:13px;color:#AAB0C5}
-.container{max-width:1100px;margin:0 auto;padding:40px 5%}
-.section{margin:70px 0}
-.section h2{font-size:28px;margin-bottom:20px;border-left:4px solid #D4AF37;padding-left:15px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
-.card{background:#131824;border:1px solid #232A3D;padding:22px;border-radius:14px}
-.card h3{color:#D4AF37;margin-bottom:8px;font-size:16px}
-.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;margin-top:10px}
-.tag.orange{background:#2a1f0f;color:#e5a663;border:1px solid #5a3a1a}
-.tag.grey{background:#1e2333;color:#8a90a8;border:1px solid #2e3650}
-.table{width:100%;border-collapse:collapse;background:#131824;border-radius:12px;overflow:hidden;margin-top:15px}
-.table th{background:#1a2032;color:#D4AF37;text-align:left;padding:12px 15px;font-size:13px}
-.table td{padding:12px 15px;border-top:1px solid #232A3D;font-size:14px}
-.steps{display:flex;flex-wrap:wrap;gap:15px;margin-top:15px}
-.step{flex:1;min-width:180px;background:#131824;border:1px solid #232A3D;padding:18px;border-radius:12px;text-align:center}
-.step b{display:block;color:#D4AF37;font-size:20px;margin-bottom:5px}
-.roadmap{border-left:2px solid #232A3D;padding-left:20px}
-.road{margin:20px 0;position:relative}
-.road:before{content:"";width:10px;height:10px;background:#D4AF37;border-radius:50%;position:absolute;left:-26px;top:5px}
-.warning{background:#1a1510;border:1px solid #5a3a1a;border-radius:12px;padding:20px;color:#d6b48a}
-.footer{border-top:1px solid #232A3D;padding:30px 5%;text-align:center;color:#6b7288;font-size:13px;margin-top:60px}
-.btn{display:inline-block;margin-top:25px;background:linear-gradient(90deg,#D4AF37,#B8962E);color:#000;padding:12px 28px;border-radius:30px;font-weight:800;text-decoration:none;letter-spacing:1px}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui;background:#F2F3F7;padding-bottom:70px}
+.top-demo{background:#D4AF37;color:#000;text-align:center;padding:6px;font-size:11px;font-weight:800;position:sticky;top:0;z-index:999}
+.header{background:linear-gradient(180deg,#0F1423,#1A2238);color:#fff;padding:14px 16px}
+.portefeuille{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.portefeuille small{color:#9AA0B5;font-size:11px} .portefeuille b{font-size:15px}
+.full{grid-column:1/3;background:linear-gradient(90deg,#D4AF37,#B8962E);color:#000;border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;font-weight:800;margin-top:4px}
+.icons{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;background:#fff}
+.icon-item{text-align:center;padding:10px 0}.icon-item i{width:44px;height:44px;background:#F5F6FA;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px}
+.banner{margin:12px 16px;background:linear-gradient(135deg,#1A0A2E,#3D1F8A,#FFC947);border-radius:16px;padding:18px;color:#fff}
+.tasks,.records{background:#fff;margin:12px;border-radius:14px;padding:14px}
+.task{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F0F0F0}
+.badge{font-size:10px;padding:4px 10px;border-radius:20px;font-weight:700}.ok{background:#E8F5E9;color:#2E7D32}.no{background:#F5F6FA;color:#999;border:1px solid #E0E0E0}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E5E5E5;display:flex;justify-content:space-around;padding:6px 0;z-index:100}
+.nav-item{text-align:center;font-size:10px;color:#999;flex:1}.nav-item.active{color:#0F1423}.nav-item i{font-size:20px;display:block}
+.page{display:none}.page.active{display:block}
+.product{background:#fff;margin:10px 12px;border-radius:12px;display:flex;border:1px solid #EEE;overflow:hidden}
+.product-info{padding:10px;flex:1}.btn-demo{background:#F5F6FA;border:1px dashed #D4AF37;color:#8a6d00;padding:6px;border-radius:6px;font-size:10px;margin-top:6px;text-align:center}
 </style>
 </head>
 <body>
-<div class="header"><div class="logo">ORVIA<span>45</span></div><div class="badge">MAQUETTE DE DÉMONSTRATION</div></div>
+<div class="top-demo">⚠️ MAQUETTE ORVIA45 - AUCUN DEPOT REEL - SIMULATION UNIQUEMENT</div>
 
-<div class="hero">
-<h1>ORVIA<span>45</span></h1>
-<p style="letter-spacing:4px;color:#D4AF37;font-weight:700;margin-bottom:10px">PRÉSENTATION DU PROJET</p>
-<p class="subtitle">Une plateforme numérique en cours de développement. Interface simple, espace personnel et information transparente.</p>
-<div class="disclaimer">
-<b style="color:#D4AF37">À propos de ce site :</b> Cette présentation expose la vision, les fonctionnalités envisagées et les prochaines étapes du projet ORVIA45. Elle ne constitue ni une offre publique d'investissement, ni une promesse de rendement, ni une invitation à déposer de l'argent.<br>
-<b>Statut actuel : le site est une maquette de démonstration.</b> Les dépôts, retraits, paiements, comptes financiers et commissions ne sont pas encore activés ni validés pour un usage réel.
+<div id="p-accueil" class="page active">
+<div class="header"><b>ORVIA45</b> <span style="float:right;background:rgba(212,175,55,0.2);border:1px solid #D4AF37;padding:3px 8px;border-radius:20px;color:#D4AF37;font-size:11px">DEMO</span>
+<div class="portefeuille" style="margin-top:12px"><div><small>Portefeuille Abonnement IA</small><br><b>0 XOF</b></div><div><small>Portefeuille Gains</small><br><b>0 XOF</b></div><div class="full"><span>Atteignez niveau pour consulter infos</span><span>ALLER →</span></div></div></div>
+<div class="icons">
+<div class="icon-item" onclick="alert('Fonction demo non active')"><i class="fa-solid fa-wallet"></i><br><span style="font-size:11px">Dépôt<br><small style="color:red">(non actif)</small></span></div>
+<div class="icon-item" onclick="alert('Fonction demo non active')"><i class="fa-solid fa-money-bill-transfer"></i><br><span style="font-size:11px">Retrait<br><small style="color:red">(non actif)</small></span></div>
+<div class="icon-item"><i class="fa-solid fa-crown"></i><br><span style="font-size:11px">VIP</span></div>
+<div class="icon-item"><i class="fa-solid fa-link"></i><br><span style="font-size:11px">Lien d'invitation</span></div>
+<div class="icon-item"><i class="fa-solid fa-building"></i><br><span style="font-size:11px">Profil entreprise</span></div>
+<div class="icon-item"><i class="fa-solid fa-certificate"></i><br><span style="font-size:11px">Certificat</span></div>
 </div>
-<a class="btn" href="#fonctionnalites">VOIR LA MAQUETTE</a>
-</div>
-
-<div class="container">
-<div class="section">
-<h2>1. Présentation générale</h2>
-<div class="grid">
-<div class="card"><h3>Interface simple</h3>Proposer une interface claire et accessible sur PC et mobile.</div>
-<div class="card"><h3>Espace personnel</h3>Donner à chaque membre un espace pour consulter ses informations.</div>
-<div class="card"><h3>Transparence</h3>Présenter clairement les fonctionnalités et conditions d'utilisation.</div>
-<div class="card"><h3>Sécurité & Support</h3>Mettre en place un support d'assistance et une infrastructure fiable.</div>
+<div class="banner"><h2>Centre<br>d'activités</h2><small style="background:#FFD700;color:#000;padding:4px 10px;border-radius:20px;font-size:10px">ORVIA45 Phase test</small><div style="font-size:11px;margin-top:8px">Interface inspirée - Maquette educative sans transaction reelle</div></div>
+<div class="tasks"><h3 style="font-size:13px">Centre de Tâches <span class="badge no">SIMULATION</span></h3>
+<div class="task"><div><b style="font-size:12px">Recompenses d'inscription</b><br><small style="color:#888">Tache decouverte</small></div><span class="badge ok">Terminé</span></div>
+<div class="task"><div><b style="font-size:12px">Enregistrement quotidien</b><br><small style="color:#888">Connexion (demo)</small></div><span class="badge ok">Terminé</span></div>
+<div class="task"><div><b style="font-size:12px">Premiere Recompense Location</b><br><small style="color:#888">Test produit formel (simulation)</small></div><span class="badge no">Incomplet</span></div>
+<div class="btn-demo">Ces taches sont exemples visuels. Aucun paiement reel.</div>
 </div>
 </div>
 
-<div class="section" id="fonctionnalites">
-<h2>2. Fonctionnalités envisagées</h2>
-<table class="table">
-<tr><th>Fonction</th><th>Description prévue</th><th>État</th></tr>
-<tr><td>Inscription et connexion</td><td>Création d'un compte et accès sécurisé</td><td><span class="tag orange">À finaliser</span></td></tr>
-<tr><td>Tableau de bord</td><td>Vue d'ensemble du compte</td><td><span class="tag orange">Maquette</span></td></tr>
-<tr><td>Dépôt et retrait</td><td>Affichage après intégration d'un prestataire autorisé</td><td><span class="tag grey">Non actif</span></td></tr>
-<tr><td>Niveaux VIP</td><td>Présentation éventuelle des avantages</td><td><span class="tag grey">À définir</span></td></tr>
-<tr><td>Parrainage</td><td>Suivi des invitations et règles de recommandation</td><td><span class="tag orange">À valider</span></td></tr>
-<tr><td>Profil et assistance</td><td>Informations membre et contact support</td><td><span class="tag orange">À développer</span></td></tr>
-</table>
-<p style="margin-top:12px;font-size:12px;color:#8a90a8">Les fonctionnalités indiquées comme prévues ne sont pas encore disponibles. Leur présence dans la maquette ne signifie pas qu'une opération réelle peut être effectuée.</p>
+<div id="p-ia" class="page">
+<div class="header"><b>IA - Produits en test</b><div style="font-size:11px;color:#9AA0B5;margin-top:6px">Tous produits en phase maquette. Aucun achat reel possible.</div></div>
+<div class="product"><div style="width:90px;background:#0F1423;color:#D4AF37;display:flex;align-items:center;justify-content:center;font-weight:900">ORVIA LABS</div><div class="product-info"><span style="background:#FFE5E5;color:#C00;font-size:9px;padding:3px 6px;border-radius:4px">EXPERIENCE - SIMULATION</span><br><b style="font-size:12px">ORVIA Astera Labs 6.0 - 60Jour DEMO</b><div style="font-size:11px;margin-top:6px">Montant indicatif (simulé): <b>15000</b> | Statut: <b style="color:red">Non actif</b></div><div class="btn-demo">Achat desactive - Maquette uniquement</div></div></div>
+<div class="product"><div style="width:90px;background:#1A1A1A;color:#fff;display:flex;align-items:center;justify-content:center">TEST</div><div class="product-info"><b style="font-size:12px">ORVIA Duree essai 1Jour</b><div style="font-size:11px">Montant test: 3000 | Limite: 0 (demo)</div><div class="btn-demo">Voir details (demo)</div></div></div>
+<div class="product"><div style="width:90px;background:#0F1423;color:#D4AF37;display:flex;align-items:center;justify-content:center">ORVIA</div><div class="product-info"><b style="font-size:12px">ORVIA1.0 - 2Jour Exemple UI</b><div style="font-size:11px">Statut: Maquette | Aucun rendement garanti</div><div class="btn-demo">Simulation visuelle uniquement</div></div></div>
+<div style="background:#FFF8E1;border:1px solid #FFE082;margin:12px;border-radius:10px;padding:12px;font-size:11px">Important: Produits maquettes visuelles. Aucun profit garanti. Aucun depot reel possible. Conforme doc ORVIA45.</div>
 </div>
 
-<div class="section">
-<h2>3. Parcours membre envisagé</h2>
-<div class="steps">
-<div class="step"><b>1</b>Découverte<br><small>Consultation des règles et infos officielles</small></div>
-<div class="step"><b>2</b>Inscription<br><small>Création de compte lorsque le module sera prêt</small></div>
-<div class="step"><b>3</b>Espace personnel<br><small>Consultation du profil et rubriques activées</small></div>
-<div class="step"><b>4</b>Services<br><small>Utilisation des seuls services validés</small></div>
-<div class="step"><b>5</b>Assistance<br><small>Signalement et support</small></div>
-</div>
+<div id="p-equipe" class="page">
+<div class="header"><b>Gestion d'Equipe</b></div>
+<div style="background:#fff;padding:12px"><button style="background:#0F1423;color:#fff;border:none;padding:8px 14px;border-radius:8px;width:100%">Rechercher (demo)</button></div>
+<div style="background:#fff;margin:12px;border-radius:12px;padding:14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px"><div style="background:#F9FAFB;padding:10px;border-radius:8px">Recharge Equipe<br><b>0</b></div><div style="background:#F9FAFB;padding:10px;border-radius:8px">Recompenses recommandation<br><b>0 - Demo</b></div></div>
+<div style="margin-top:12px;font-size:11px;background:#FFFBEB;border:1px dashed #D4AF37;padding:8px;border-radius:8px">Taux PDF: N1 15% / N2 5% / N3 3% - Non confirmes, non payables - Simulation uniquement</div></div>
 </div>
 
-<div class="section">
-<h2>4. Programme de parrainage envisagé</h2>
-<table class="table">
-<tr><th>Niveau</th><th>Taux évoqué</th><th>Base envisagée</th></tr>
-<tr><td>Niveau 1</td><td>15%</td><td>Premier dépôt du filleul direct</td></tr>
-<tr><td>Niveau 2</td><td>5%</td><td>Premier dépôt niveau 2</td></tr>
-<tr><td>Niveau 3</td><td>3%</td><td>Premier dépôt niveau 3</td></tr>
-</table>
-<div class="disclaimer" style="margin-top:15px">Important : ces taux ne sont ni confirmés, ni configurés, ni payables. Leur éventuelle utilisation dépendra de la viabilité économique, de règles transparentes et d'une vérification juridique. Il ne s'agit pas d'un rendement garanti.</div>
+<div id="p-pub" class="page"><div class="header"><b>Publication</b></div><div style="background:#fff;margin:10px;border-radius:12px;padding:12px"><b style="font-size:13px">Conference ORVIA (maquette)</b><div style="margin-top:10px;background:#1A1A1A;color:#FFD700;padding:20px;border-radius:8px;text-align:center">Image conference - Exemple</div></div></div>
+
+<div id="p-moi" class="page">
+<div style="background:linear-gradient(180deg,#0F1423,#1A2238);color:#fff;padding:20px;text-align:center"><div style="width:60px;height:60px;background:#D4AF37;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900">918</div><div style="margin-top:8px"><b>91851536</b> <span style="background:#D4AF37;color:#000;padding:2px 8px;border-radius:20px;font-size:10px">Stagiaire DEMO</span></div></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);background:#fff;padding:12px;text-align:center;border-bottom:1px solid #EEE;font-size:11px"><div><b>0</b><br><small>Revenu total</small></div><div><b>0</b><br><small>Quotidien</small></div><div><b>0</b><br><small>Mensuel</small></div><div><b>0</b><br><small>Profits</small></div></div>
+<div style="margin:12px;background:#0F1423;color:#D4AF37;border-radius:10px;padding:12px;font-size:11px"><b>ORVIA45:</b> Site maquette demonstration. Depots, retraits non actives. Aucun benefice garanti.</div>
 </div>
 
-<div class="section">
-<h2>5. Sécurité et transparence - Prérequis avant ouverture</h2>
-<div class="grid">
-<div class="card">Protection des comptes et mots de passe</div>
-<div class="card">Sécurisation des échanges et données personnelles</div>
-<div class="card">Règles de confidentialité et conditions d'utilisation</div>
-<div class="card">Historique compréhensible des opérations</div>
-<div class="card">Procédure de réclamation</div>
-<div class="card">Vérification prestataires et obligations légales</div>
+<div class="bottom-nav">
+<div class="nav-item active" onclick="showPage('p-accueil',this)"><i class="fa-solid fa-house"></i><br>Accueil</div>
+<div class="nav-item" onclick="showPage('p-ia',this)"><i class="fa-solid fa-chart-line"></i><br>IA</div>
+<div class="nav-item" onclick="showPage('p-equipe',this)"><i class="fa-solid fa-users"></i><br>Equipe</div>
+<div class="nav-item" onclick="showPage('p-pub',this)"><i class="fa-regular fa-newspaper"></i><br>Publication</div>
+<div class="nav-item" onclick="showPage('p-moi',this)"><i class="fa-regular fa-user"></i><br>Moi</div>
 </div>
-</div>
-
-<div class="section">
-<h2>6. Feuille de route</h2>
-<div class="roadmap">
-<div class="road"><b>Phase 1 - Préparation</b> : Finaliser nom, contenu, pages - <i>Présentation cohérente</i></div>
-<div class="road"><b>Phase 2 - Dépôt du code</b> : Organiser fichiers dans GitHub - <i>Code sauvegardé</i> ✅</div>
-<div class="road"><b>Phase 3 - Mise en ligne de test</b> : Déployer version démo - <i>Site de test accessible</i> ✅ Nous sommes ici</div>
-<div class="road"><b>Phase 4 - Développement</b> : Comptes, base de données, admin</div>
-<div class="road"><b>Phase 5 - Vérifications</b> : Sécurité, prestataires, règles légales</div>
-<div class="road"><b>Phase 6 - Lancement éventuel</b> : Ouvrir uniquement fonctions validées</div>
-</div>
-</div>
-
-<div class="section">
-<div class="warning">
-<b>7. Ce que le projet n'est pas encore</b><br><br>
-À la date de cette présentation, ORVIA45 est un projet en cours de préparation et son site est une maquette de démonstration. Aucun service de dépôt ou de retrait réel n'est annoncé comme opérationnel. Aucun bénéfice, intérêt, revenu ou remboursement n'est garanti. Personne ne devrait envoyer d'argent sur la base de cette maquette.
-</div>
-</div>
-
-<div class="section" style="text-align:center">
-<h2>8. Conclusion</h2>
-<p>ORVIA45 ambitionne de devenir une plateforme numérique structurée, accessible et transparente. La priorité est de construire une base technique fiable, de préciser les services et de vérifier les exigences légales avant toute activité financière.</p>
-<br>
-<p style="color:#6b7288;font-size:13px">Contact et informations officielles seront ajoutés lorsque confirmés.</p>
-</div>
-</div>
-
-<div class="footer">© 2026 ORVIA45 - Projet en développement - Maquette de démonstration - Tous droits réservés<br>Version préliminaire - Octobre 2026</div>
+<script>
+function showPage(id,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));el.classList.add('active');window.scrollTo(0,0);}
+</script>
 </body>
 </html>
