@@ -38,3 +38,11 @@ Lancer `npm test` pour exécuter la suite automatisée fournie par SMILE. Ces te
 ## Accès administrateur depuis un appareil de confiance
 
 Après une première connexion normale à l’administration, le bouton « Autoriser cet appareil » enregistre un jeton aléatoire côté serveur (seul son hash est conservé en base). Le navigateur reçoit un cookie HttpOnly, SameSite=Strict et Secure en production, valable 180 jours. Sur ce même navigateur, l’ouverture de /admin.html rétablit automatiquement une session administrateur sans ressaisie des identifiants. L’autorisation est liée au cookie de ce navigateur, pas à une preuve matérielle absolue de l’appareil. Le bouton « Retirer l’autorisation de cet appareil » révoque ce jeton. Une déconnexion explicite révoque également l’autorisation persistante. Une première connexion avec les identifiants reste nécessaire pour autoriser l’appareil.
+
+## Restauration d'une sauvegarde dans une base de test isolée
+
+La commande `npm run restore:test -- chemin/vers/sauvegarde.json` restaure un export JSON ORVIA45 uniquement dans une base PostgreSQL de test. Elle exige `RESTORE_DATABASE_URL`, `DATABASE_URL` (URL de production utilisée uniquement pour comparaison), `ORVIA45_RESTORE_MODE=isolated-test` et `ORVIA45_RESTORE_CONFIRM=I_UNDERSTAND_THIS_IS_TEST_ONLY`. Les deux URL doivent désigner des bases différentes. `RESTORE_PGSSL=true` active TLS avec vérification du certificat.
+
+La cible doit être initialisée avec le schéma ORVIA45 compatible et toutes ses tables publiques doivent être vides. L'import s'exécute dans une transaction ; toute erreur entraîne un rollback. Les références étrangères non nullables sont ordonnées, les références nullables sont rétablies après insertion, et les séquences sont recalées. Les cycles non nullables, les clés primaires absentes, les tables manquantes et les schémas incompatibles provoquent un refus. La commande n'offre volontairement aucun mode de restauration en production.
+
+Cette procédure ne restaure que les données présentes dans l'export JSON : elle ne restaure ni les fichiers téléversés ni les sessions exclues. Avant utilisation, effectuer un essai sur une base jetable et contrôler manuellement les soldes, écritures comptables, souscriptions, retraits et relations utilisateurs. Ne jamais définir `RESTORE_DATABASE_URL` sur la base de production.

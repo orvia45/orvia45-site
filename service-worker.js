@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = 'orvia45-shell-v3';
+const CACHE_NAME = 'orvia45-shell-v5';
 const APP_SHELL = [
   '/', '/index.html', '/style.css', '/orvia45-theme.css', '/splash.js', '/app.js',
   '/support-links.js', '/home-records.js', '/password-toggle.js',

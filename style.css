@@ -158,3 +158,8 @@ body{background:#fff;color:#111}.top{display:none}main{max-width:520px;padding:1
 .account-grid .account-option.active{background:#e8f2ff;border:2px solid #1675d1;color:#0755a5;box-shadow:0 3px 12px #1675d122}
 .account-grid .account-option.active b{color:#075fc1}
 @media(max-width:390px){.account-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Badge des notifications non lues */
+.top-actions .notice-button{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:38px}.notice-count{position:absolute;top:-2px;right:-8px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;line-height:17px;text-align:center;border:1px solid #071a3c}.notice-count[hidden]{display:none}
+
+.user-support-unread-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-style:normal;font-weight:800;line-height:18px}.user-support-unread-badge[hidden]{display:none}

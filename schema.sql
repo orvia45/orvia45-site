@@ -303,6 +303,7 @@ ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS paid_by BIGINT REFERENCES users
 
 -- Paramètres programmables des produits SM Durée limitée (v1.53.6).
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS sale_start_at TIMESTAMPTZ;
+ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservation_end_at TIMESTAMPTZ;
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS sale_end_at TIMESTAMPTZ;
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservation_amounts_cfa JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS product_wallet_balance_cfa BIGINT NOT NULL DEFAULT 0 CHECK(product_wallet_balance_cfa>=0);

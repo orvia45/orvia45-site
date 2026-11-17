@@ -36,7 +36,7 @@
   <p class="auth-hint">Vous avez déjà un compte ? Choisissez « J’ai déjà un compte » pour vous connecter.</p>
  </section>
 </div>
-<header class="top"><div class="brand">ORVIA 45</div><div class="top-actions"><button id="notice" aria-label="Notifications">♧</button><button id="language">FR</button></div></header>
+<header class="top"><div class="brand">ORVIA 45</div><div class="top-actions"><button id="notice" class="notice-button" aria-label="Notifications" aria-haspopup="dialog"><span aria-hidden="true">♧</span><span id="notice-count" class="notice-count" aria-live="polite" hidden></span></button><button id="language">FR</button></div></header>
 <main>
 <section id="home" class="page active">
   <div class="hero">
@@ -99,7 +99,7 @@
     <button class="account-option" type="button" data-action="my-products"><b>▤</b><span>Mes produits</span></button>
     <button class="account-option" type="button" data-action="history"><b>↔</b><span>Historique financier</span></button>
     <button class="account-option" type="button" data-tab="team"><b>＋</b><span>Inviter des amis</span></button>
-    <button class="account-option" type="button" data-action="support"><b>◉</b><span>Service client</span></button>
+    <button class="account-option" type="button" data-action="support"><b>◉</b><span>Service client</span><i id="user-support-unread-badge" class="user-support-unread-badge" hidden>0</i></button>
   </div>
   <div class="menu"><button data-action="settings">⚙ Paramètres <span>›</span></button><button data-action="download">⇩ Télécharger l'APP <span>›</span></button><button data-action="logout">↪ Se déconnecter <span>›</span></button></div>
 </section>

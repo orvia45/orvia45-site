@@ -5,7 +5,11 @@
   "description": "ORVIA 45 — plateforme intégrée avec gestion des offres, portefeuilles et opérations Mobile Money manuelles",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "backup:s3": "node scripts/backup-to-s3.js",
+    "backup:validate": "node scripts/validate-backup.js",
+    "restore:prepare-test": "node scripts/prepare-restore-check.js",
+    "restore:test": "node scripts/run-isolated-restore.js"
   },
   "engines": {
     "node": ">=18"

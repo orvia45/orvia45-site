@@ -1,0 +1,34 @@
+# Secrets et configuration locale
+.env
+.env.*
+!.env.example
+
+# Dependances et sorties locales
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+
+# Sauvegardes de bases de donnees (ne pas publier sur GitHub)
+/backups/
+/backup/
+*.dump
+*.backup
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+# Exclure uniquement les exports SQL de sauvegarde, pas schema.sql
+*_backup*.sql
+*backup*.sql
+*backup*.json
+
+# Donnees privees eventuellement deposees par les utilisateurs
+/uploads/private/
+/uploads/documents/
+/uploads/receipts/
+/uploads/identity/
+/uploads/kyc/
