@@ -1,0 +1,14 @@
+SMILE v1.41 — corrections initiales
+
+Base : archive SMILE v1.40 MOBILE MONEY MANUEL.
+
+Modifications incluses :
+- Libellés du bloc statistiques de Mon compte : Revenu total, Revenu quotidien, Revenu mensuel, Profits total.
+- Réinitialisation du formulaire de déverrouillage Contrôle sécurisée si le formulaire est présent.
+- Version du package mise à jour en 1.41.0.
+
+Vérifications : node --check sur admin.js, app.js et server.js ; npm test : 44 tests réussis.
+
+IMPORTANT — Cette archive ne prétend pas terminer toutes les demandes de refonte. La navigation Retour avec historique, l’exclusion complète des comptes spéciaux de toutes les vues ordinaires, la séparation renforcée des espaces, la refonte visuelle du service client et la redirection automatique du retrait vers la création du portefeuille nécessitent encore des modifications et des tests dédiés.
+
+Sécurité : aucun mot de passe communiqué dans la conversation n’a été intégré au code ou à cette archive. Configurez les secrets uniquement dans les variables privées de l’hébergeur.

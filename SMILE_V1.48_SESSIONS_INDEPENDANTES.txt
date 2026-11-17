@@ -1,0 +1,14 @@
+SMILE v1.49 — PAIEMENTS TMoney / Flooz ET VALIDATION ADMINISTRATIVE
+
+Base de travail : v1.48 — sessions administrateur / utilisateur indépendantes.
+
+Modifications v1.49 :
+- Choix TMoney et Flooz dans les formulaires de dépôt, retrait et bénéficiaires.
+- Les dépôts restent en attente jusqu’à vérification et approbation administrative.
+- Les retraits suivent désormais deux étapes distinctes : approbation administrative, puis confirmation du transfert réel avec référence.
+- Le montant du retrait est réservé dès la demande; le rejet le restitue au portefeuille.
+- L’administrateur qui approuve et celui qui confirme le paiement sont tracés séparément.
+- Les références uniques et les écritures comptables idempotentes continuent de protéger contre les doubles traitements.
+- Le service client et son historique de messagerie utilisateur / administration sont conservés.
+
+Limites : aucun connecteur API direct TMoney/Flooz n’est inclus. Les transferts restent manuels. Appliquer schema.sql sur une base de test, configurer les secrets côté serveur et effectuer les tests de bout en bout avant la production.

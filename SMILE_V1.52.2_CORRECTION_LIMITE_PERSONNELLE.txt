@@ -1,0 +1,11 @@
+SMILE v1.52.2 — CORRECTION DE LA LIMITE PERSONNELLE
+
+Corrections :
+- L'initialisation d'une limite personnelle tient compte des souscriptions déjà approuvées ou libérées.
+- Lors d'une modification individuelle par l'administration, le nombre réellement consommé est recalculé depuis les investissements approuvés/libérés et comparé à l'ancien compteur. Le plus grand des deux est conservé afin de ne pas effacer de souscriptions consommées.
+- La limite restante est recalculée à partir de la nouvelle limite totale moins les souscriptions consommées.
+- Le libellé « Limite personnelle » et l'actualisation automatique sont conservés.
+
+Vérifications locales : 67 tests réussis, 0 échec ; vérifications syntaxiques Node.js réussies ; archive ZIP testée.
+
+Important : ces vérifications sont automatisées et locales. Elles ne remplacent pas un test sur la base PostgreSQL et l'hébergement réels. Effectuer une sauvegarde de la base avant déploiement.

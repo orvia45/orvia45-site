@@ -1,0 +1,10 @@
+SMILE v1.45 — Code de parrainage à l’inscription
+
+- Ajout du champ facultatif « Code de parrainage » après le mot de passe.
+- Depuis un lien ?ref=..., le code est prérempli et le champ est en lecture seule.
+- Sans lien, le champ reste modifiable et peut être laissé vide.
+- Le serveur vérifie tout code non vide et refuse l’inscription si le code est invalide ou si le parrain n’est pas actif.
+- Un code valide associe le nouvel utilisateur au parrain existant.
+
+Vérifications locales : node --check app.js, node --check server.js et npm test (51 tests réussis).
+Les parcours réels avec PostgreSQL/Render n’ont pas été exécutés ici.

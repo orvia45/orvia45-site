@@ -1,0 +1,9 @@
+SMILE v1.53.4 — ÉCRAN DE DÉMARRAGE OFFICIEL
+
+- Ajout de l'image officielle fournie par le propriétaire dans uploads/smile-splash.png.
+- L'image apparaît comme premier écran au chargement du site web et des versions mobiles qui utilisent cette même interface web (WebView/PWA).
+- Image conservée telle que fournie, sans recadrage ni retouche; affichage object-fit:contain pour éviter de couper le logo sur téléphone, tablette et ordinateur.
+- Disparition progressive après le chargement, avec délai de secours pour ne pas bloquer l'accès au site.
+- Aucun changement volontaire des règles métier, paiements, offres, VIP, produits ou écrans existants.
+
+Limite : cette archive contient le site web/API Node.js, pas les projets natifs Android (APK/Gradle) ou iOS (Xcode). Pour un écran natif garanti avant le chargement d'une WebView, il faudra intégrer la même ressource dans les projets mobiles natifs.

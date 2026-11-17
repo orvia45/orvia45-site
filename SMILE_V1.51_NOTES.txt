@@ -1,0 +1,20 @@
+SMILE v1.51 — QUOTAS INDIVIDUELS/GLOBAUX ET MIXX (TMONEY)
+
+Base : SMILE v1.50 corrigée.
+
+Modifications :
+- Gestion individuelle des quotas conservée.
+- Ajout d’une action administrative de quota global à toutes les offres, appliquée à tous les comptes utilisateur existants, anciens et nouveaux.
+- Le quota restant choisi est appliqué à chaque membre; les souscriptions déjà consommées sont conservées en augmentant le total autorisé en conséquence.
+- Les quotas par défaut de toutes les offres sont également mis à jour pour les futurs membres.
+- Confirmation explicite et motif obligatoire; chaque compte reçoit une ligne d’audit et l’action globale est journalisée.
+- Libellé utilisateur et administration : Mixx (TMoney). La clé technique historique `tmoney` est conservée pour la compatibilité des transactions existantes.
+- Paiements toujours activés en mode manuel; aucune API ni exécution automatique; chaque dépôt et retrait reste soumis à approbation administrative.
+
+Vérifications locales :
+- node --check server.js : OK
+- node --check app.js : OK
+- node --check admin.js : OK
+- npm test : 61 tests réussis, 0 échec.
+
+Limites : la route SQL de mise à jour globale n’a pas été exécutée contre une base PostgreSQL réelle dans cet environnement. Avant production, appliquer/tester la version sur une base de recette, puis effectuer les parcours complets dans un navigateur et sur l’hébergement.

@@ -1,0 +1,8 @@
+SMILE v1.52.7 — Suppression de l’obligation d’achat séquentiel
+
+- Les membres peuvent souscrire à n’importe quelle offre publiée et disponible sans acheter les offres précédentes.
+- La vérification d’ordre a été supprimée côté serveur pour les produits SMILE IA et SUPER IA VIP.
+- Le catalogue utilisateur n’affiche plus de verrouillage ni de message exigeant le produit précédent.
+- Les contrôles indépendants restent actifs : offre publiée/active, achats autorisés, stock, limite personnelle, solde, clé anti-doublon et écritures comptables.
+- Les règles de paiement manuel Mixx (TMoney)/Flooz et l’approbation administrative des dépôts/retraits ne sont pas modifiées.
+- Les éventuelles conditions d’accès VIP par parrainage et dépôts restent distinctes et ne sont pas ajoutées par cette version.

@@ -1,0 +1,9 @@
+SMILE v1.43 — corrections complémentaires
+
+- Dans l'historique financier général d'un compte spécial (controle1 / controle2), seules les demandes de retrait restent visibles.
+- Les dépôts, investissements et commissions de parrainage des comptes spéciaux sont exclus de cet historique général.
+- Les données originales ne sont pas supprimées : les espaces dédiés Contrôle et le grand livre restent les sources de consultation comptable.
+- Les autres corrections de l'archive v1.42 sont conservées.
+
+Vérification locale : node --check server.js ; suite node --test.
+Attention : tests automatisés locaux, sans test de connexion à une base PostgreSQL réelle ni déploiement Render.

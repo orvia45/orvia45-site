@@ -1,0 +1,11 @@
+SMILE v1.47 — NAVIGATION RETOUR INTELLIGENTE
+
+Modifications :
+- Ajout d’un bouton « Retour » contextuel dans chaque rubrique de l’espace utilisateur, sauf l’accueil.
+- Le bouton revient à la rubrique réellement visitée précédemment ; en l’absence d’historique interne, il revient à l’accueil.
+- Navigation utilisateur synchronisée avec l’historique du navigateur (bouton Retour Android/navigateur).
+- Ajout d’un bouton « Retour » dans chaque rubrique de l’administration, avec retour à la rubrique précédente ou à la vue générale.
+- Navigation fluide avec défilement doux, sans déconnexion ni rechargement de page.
+- Les pages et formulaires ne sont pas réinitialisés par le simple changement de rubrique ; les données déjà saisies restent dans le DOM tant que la page n’est pas rechargée.
+
+Les boutons de retour ne remplacent pas les contrôles de fermeture des fenêtres modales.

@@ -1,0 +1,16 @@
+{
+  "name": "orvia45-platform",
+  "version": "2.2.0",
+  "private": true,
+  "description": "ORVIA 45 — plateforme intégrée avec gestion des offres, portefeuilles et opérations Mobile Money manuelles",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

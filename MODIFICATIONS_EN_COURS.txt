@@ -1,0 +1,18 @@
+SMILE v1.36 — intégration unifiée
+
+INTÉGRÉ :
+- Inscription : nom d'utilisateur et téléphone obligatoires, e-mail facultatif, mot de passe minimum 6 caractères.
+- Connexion par téléphone ou e-mail et changement de mot de passe minimum 6 caractères.
+- Rubrique admin « Contrôle » protégée par un mot de passe spécial haché côté serveur et une session HttpOnly de 30 minutes.
+- Provisionnement des comptes controle1 et controle2 depuis les variables privées de l'environnement.
+- Activation/désactivation individuelle, historique des changements et historique des commissions créditées/perdues.
+- Commission de 12 % pour chaque compte spécial actif au moment du premier dépôt confirmé d'un nouvel utilisateur.
+- Dépôt ultérieur sans commission spéciale ; commission manquée définitivement perdue si le compte est inactif.
+- Ecritures en partie double et attribution idempotente dans la transaction de validation du dépôt.
+- 28 tests automatisés passent.
+
+CONFIGURATION AVANT DÉMARRAGE :
+Voir CONFIGURATION_CONTROLE.md. Les secrets ne sont volontairement pas inclus dans le ZIP ; ils doivent être définis dans les variables privées du serveur. Sauvegarder PostgreSQL avant la migration.
+
+LIMITES DE VALIDATION :
+Les tests automatisés Node.js ont été exécutés. Une validation complète sur une base PostgreSQL réelle et un déploiement sur l'hébergeur restent à effectuer avec les variables d'environnement du propriétaire.

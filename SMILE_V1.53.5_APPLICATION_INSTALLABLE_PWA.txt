@@ -1,0 +1,21 @@
+SMILE v1.53.5 — VERSION WEB INSTALLABLE (PWA)
+
+- Ajout d’un manifeste web installable pour Android et iPhone/iPad compatibles.
+- Ajout des icônes d’installation PNG 192x192 et 512x512 dérivées de l’identité visuelle SMILE. L’image originale de démarrage dans uploads/smile-splash.png n’est pas modifiée.
+- Ajout d’un service worker limité aux ressources statiques de l’interface. Les routes /api/ ne sont jamais mises en cache et restent toujours en réseau; les dépôts, retraits, soldes, sessions et données personnelles ne sont jamais rendus disponibles hors ligne.
+- Ajout des métadonnées Apple pour l’ajout à l’écran d’accueil sur iPhone/iPad.
+- Ajout du type MIME manifest+json au serveur.
+- Aucun changement volontaire des règles VIP, du moteur financier, des paiements ou des écrans métier.
+
+INSTALLATION
+- Android (Chrome) : ouvrir le site SMILE en HTTPS, puis utiliser le menu du navigateur « Installer l’application » ou « Ajouter à l’écran d’accueil » si proposé.
+- iPhone/iPad (Safari) : ouvrir le site SMILE en HTTPS, toucher Partager, puis « Sur l’écran d’accueil ».
+
+LIMITES IMPORTANTES
+Cette version fournit une application web progressive (PWA) installable, qui réutilise le site et l’API existants. Elle n’est pas un APK Android natif ni une archive iOS signée pour l’App Store. Les publications sur Google Play et App Store, les certificats/signatures et les projets natifs dédiés restent des étapes distinctes. Le service worker ne met pas en cache les API : une connexion Internet est nécessaire pour se connecter et utiliser les fonctions métier.
+
+À TESTER AVANT DÉPLOIEMENT
+- Servir le site en HTTPS.
+- Vérifier installation Android Chrome et iOS Safari sur appareils réels.
+- Vérifier l’actualisation après mise à jour et la disponibilité des fichiers du shell.
+- Faire une recette complète avec PostgreSQL et comptes de test; les tests automatisés locaux ne prouvent pas le fonctionnement sur l’hébergement de production.

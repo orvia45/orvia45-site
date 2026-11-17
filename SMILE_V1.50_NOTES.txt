@@ -1,0 +1,16 @@
+SMILE v1.50 — PAIEMENTS MANUELS ET SÉPARATION DES ESPACES
+
+Base : SMILE v1.49 TMoney/Flooz.
+
+Correctifs et garanties :
+- Les espaces utilisateur et administrateur utilisent des sessions/cookies distincts.
+- La connexion au portail utilisateur refuse explicitement un compte administrateur.
+- La connexion au portail administrateur refuse explicitement un compte utilisateur.
+- Le portail utilisateur ne redirige plus vers l’administration sur la base d’un rôle reçu : il n’accepte que les sessions de rôle utilisateur.
+- Le portail administrateur vérifie exclusivement une session administrateur.
+- Les paiements TMoney et Flooz restent activés par défaut en mode manuel.
+- Chaque dépôt et chaque retrait exige une validation administrative; aucun traitement automatique par API.
+- Service client, historique des messages et fonctions existantes conservés.
+
+Validation v1.50 : 58 tests réussis, 0 échec.
+Avant mise en production : tests navigateur réels, application/contrôle de schema.sql sur une base de test, configuration des secrets et coordonnées marchandes officielles. Les tests automatisés ne remplacent pas un test navigateur ni un déploiement.

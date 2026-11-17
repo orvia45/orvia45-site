@@ -1,0 +1,39 @@
+/* ORVIA45 visual identity layer applied to the integrated SMILE workflows. */
+:root{--orvia-navy:#07172b;--orvia-blue:#102c4a;--orvia-gold:#d7b66f;--orvia-gold-light:#f0d99e;--orvia-bg:#f3f5f8;--orvia-ink:#1b2635;--orvia-muted:#8993a1;--orvia-line:#e6eaf0}
+body{background:var(--orvia-bg)!important;color:var(--orvia-ink)!important}
+.top,.bar,.admin-top,.admin-header{background:linear-gradient(130deg,var(--orvia-navy),var(--orvia-blue))!important;color:#fff!important}
+.brand,.bar .brand{color:#fff!important;letter-spacing:2px}
+.hero,.profile,.vip-current,.admin-hero{background:linear-gradient(130deg,var(--orvia-navy),var(--orvia-blue))!important;color:#fff!important}
+.banner{background:linear-gradient(120deg,var(--orvia-navy),var(--orvia-blue))!important;border:1px solid #3a506b!important}
+.primary,.btn,.tab.selected,.bottom button.selected,.nav button.active{background:linear-gradient(110deg,var(--orvia-gold),var(--orvia-gold-light))!important;color:#1b2635!important;border-color:var(--orvia-gold)!important}
+.primary:hover,.btn:hover{filter:brightness(1.03)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #d7b66f!important;outline-offset:2px}
+.panel,.module,.card,.product,.notice-card,.menu,.stat,.tile{border-color:var(--orvia-line)!important}
+.bottom,.nav{background:#ffffffed!important;border-top:1px solid var(--orvia-line)!important}
+.bottom button.selected,.nav button.active{background:transparent!important;color:#a27e3e!important}
+input,select,textarea{border-color:#dce2ea!important}
+.admin-panel .primary,.login .primary{background:linear-gradient(110deg,var(--orvia-gold),var(--orvia-gold-light))!important;color:#1b2635!important}
+
+/* ORVIA 45 — identité appliquée aussi aux bannières et aux offres à durée limitée. */
+.orvia-vip-promo{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;margin:10px 0 14px;padding:17px 18px;border:1px solid #b89552;border-radius:16px;background:linear-gradient(115deg,#06172c 0%,#102f50 68%,#1b4266 100%);color:#fff;text-align:left;box-shadow:0 5px 16px #07172b22;cursor:pointer}
+.orvia-vip-promo-copy{display:grid;gap:6px;min-width:0}
+.orvia-vip-promo-copy small{color:#e3c77f;font-size:10px;font-weight:800;letter-spacing:1.4px}
+.orvia-vip-promo-copy strong{font-size:clamp(17px,4.5vw,22px);line-height:1.2}
+.orvia-vip-promo-copy>span{font-size:12px;color:#e9d7ad}
+.orvia-vip-promo-copy b{font-size:17px;margin-left:4px}
+.orvia-vip-promo-mark{flex:0 0 58px;width:58px;height:58px;display:grid;place-items:center;border:1px solid #d7b66f;border-radius:16px;background:#d7b66f18;color:#f0d99e;font-size:37px}
+@media(min-width:700px){.orvia-vip-promo{max-width:760px;margin:14px auto;padding:20px 24px}}
+
+/* Les offres à durée limitée utilisent la même palette bleu nuit / or d'ORVIA 45. */
+.limited-product-card{border:1px solid #d7b66f!important;background:#fff!important;color:#1b2635!important}
+.limited-topbar{background:linear-gradient(100deg,#07172b,#173b5e)!important;color:#f0d99e!important}
+.limited-topbar span{color:#f0d99e!important}
+.limited-product-info{color:#26364a!important}
+.limited-product-info h3{color:#102c4a!important}
+.limited-product-info strong{color:#9a7433!important}
+.limited-countdown{border:1px solid #d7b66f!important;background:linear-gradient(100deg,#f8f3e8,#fffaf0)!important;color:#102c4a!important}
+.limited-countdown span{color:#9a7433!important}
+.limited-action{background:linear-gradient(110deg,#d7b66f,#f0d99e)!important;color:#1b2635!important;border:1px solid #c4a15d!important}
+.limited-orvia-art{min-height:120px!important;max-height:150px!important;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid #d7b66f!important;border-radius:12px;background:radial-gradient(circle at 50% 20%,#244d73,#07172b 76%)!important;color:#f0d99e!important;text-align:center;font-size:13px!important;letter-spacing:1px}
+.limited-orvia-art strong{font-size:17px;color:#f0d99e!important}
+.limited-orvia-art span{font-size:10px;color:#fff!important;border:1px solid #d7b66f;border-radius:20px;padding:5px 8px}

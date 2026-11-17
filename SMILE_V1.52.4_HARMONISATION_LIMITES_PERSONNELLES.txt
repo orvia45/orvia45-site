@@ -1,0 +1,8 @@
+SMILE v1.52.4 — Harmonisation de la limite personnelle dans l’administration
+
+- Remplacement des libellés visibles « quota » par « limite personnelle » dans le panneau administrateur.
+- Clarification du formulaire de modification individuelle et de la gestion globale.
+- Conservation des identifiants techniques internes et des routes API afin de ne pas perturber les données existantes.
+- Aucun changement des règles de calcul ou de synchronisation introduites dans les versions précédentes.
+
+Cette version harmonise l’interface. Elle ne constitue pas une preuve de fonctionnement sur l’hébergement ou la base de données de production.

@@ -1,0 +1,11 @@
+SMILE v1.53.3 — Correction des liens de contact
+
+- Suppression du lien WhatsApp vide qui provoquait « Impossible d'ouvrir le lien de cette discussion ».
+- Les deux accès WhatsApp affichent maintenant un message clair tant que le numéro officiel n'est pas renseigné.
+- Le numéro pourra être intégré dans support-links.js au format international, chiffres uniquement (ex. 228XXXXXXXX).
+- Dès qu'il est renseigné, les liens wa.me sont générés automatiquement.
+- Le bouton Google ouvre explicitement https://www.google.com/.
+- Le bouton Google est un lien vers le site Google, pas une authentification Google à SMILE.
+- Aucun autre parcours métier n'a été volontairement modifié.
+
+Vérifications : node --check server.js, app.js, support-links.js ; npm test.

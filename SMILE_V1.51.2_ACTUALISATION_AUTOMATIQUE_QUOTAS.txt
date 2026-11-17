@@ -1,0 +1,10 @@
+SMILE v1.51.2 — ACTUALISATION AUTOMATIQUE DES QUOTAS
+
+- Le compte utilisateur recharge automatiquement les offres et quotas toutes les 30 secondes lorsque la page est visible et que l’utilisateur est connecté.
+- Les quotas sont également actualisés lorsque l’utilisateur revient sur l’onglet ou redonne le focus à la fenêtre.
+- Aucune déconnexion, reconnexion ou actualisation manuelle n’est nécessaire pour voir une modification administrative.
+- Cette actualisation ne modifie pas les règles de paiement : paiements activés, traitement manuel, approbation administrative obligatoire pour chaque dépôt et chaque retrait.
+
+Vérifications : voir les tests automatisés et le contrôle ZIP réalisés lors de la préparation de l’archive. Cette version n’est pas déployée automatiquement sur l’hébergement.
+
+- Libellé utilisateur harmonisé : « Limite personnelle » remplace « Quota » dans les cartes d’accueil et les listes d’offres.

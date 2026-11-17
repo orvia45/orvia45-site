@@ -1,0 +1,13 @@
+SMILE v1.52.5 — Achats séquentiels obligatoires
+
+Règle ajoutée : les produits des séries SMILE-IA et SMILE-SUPER-IA doivent être achetés dans l'ordre numérique.
+- SMILE-IA-01 est le premier produit de la série IA ; SMILE-IA-02 exige un achat validé de SMILE-IA-01, SMILE-IA-03 exige SMILE-IA-02, etc.
+- SMILE-SUPER-IA-00 est le premier produit VIP ; les niveaux suivants exigent le niveau immédiatement précédent.
+- La vérification est effectuée côté serveur dans la transaction d'achat : un appel API direct ne peut pas contourner le verrouillage.
+- Le catalogue membre affiche le produit précédent requis et désactive le bouton tant que l'achat précédent n'existe pas.
+- Un achat précédent est reconnu s'il existe une souscription de ce membre pour l'offre précédente en statut approved ou released.
+- Les autres catégories/offres dont le code ne correspond pas à ces séries ne sont pas affectées.
+
+Vérifications : node --check server.js ; node --check app.js ; npm test : 72 tests réussis, 0 échec.
+
+Non vérifié : déploiement Render, navigateur réel et base PostgreSQL de production.

@@ -1,85 +1,113 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ORVIA45 - Maquette Demo</title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui;background:#F2F3F7;padding-bottom:70px}
-.top-demo{background:#D4AF37;color:#000;text-align:center;padding:6px;font-size:11px;font-weight:800;position:sticky;top:0;z-index:999}
-.header{background:linear-gradient(180deg,#0F1423,#1A2238);color:#fff;padding:14px 16px}
-.portefeuille{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.portefeuille small{color:#9AA0B5;font-size:11px} .portefeuille b{font-size:15px}
-.full{grid-column:1/3;background:linear-gradient(90deg,#D4AF37,#B8962E);color:#000;border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;font-weight:800;margin-top:4px}
-.icons{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;background:#fff}
-.icon-item{text-align:center;padding:10px 0}.icon-item i{width:44px;height:44px;background:#F5F6FA;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px}
-.banner{margin:12px 16px;background:linear-gradient(135deg,#1A0A2E,#3D1F8A,#FFC947);border-radius:16px;padding:18px;color:#fff}
-.tasks,.records{background:#fff;margin:12px;border-radius:14px;padding:14px}
-.task{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F0F0F0}
-.badge{font-size:10px;padding:4px 10px;border-radius:20px;font-weight:700}.ok{background:#E8F5E9;color:#2E7D32}.no{background:#F5F6FA;color:#999;border:1px solid #E0E0E0}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E5E5E5;display:flex;justify-content:space-around;padding:6px 0;z-index:100}
-.nav-item{text-align:center;font-size:10px;color:#999;flex:1}.nav-item.active{color:#0F1423}.nav-item i{font-size:20px;display:block}
-.page{display:none}.page.active{display:block}
-.product{background:#fff;margin:10px 12px;border-radius:12px;display:flex;border:1px solid #EEE;overflow:hidden}
-.product-info{padding:10px;flex:1}.btn-demo{background:#F5F6FA;border:1px dashed #D4AF37;color:#8a6d00;padding:6px;border-radius:6px;font-size:10px;margin-top:6px;text-align:center}
-</style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071a3c">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="ORVIA 45">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/orvia45-192.png">
+<title>ORVIA 45</title>
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="orvia45-theme.css">
 </head>
 <body>
-<div class="top-demo">⚠️ MAQUETTE ORVIA45 - AUCUN DEPOT REEL - SIMULATION UNIQUEMENT</div>
+<div id="smile-splash" class="smile-splash" role="status" aria-label="ORVIA 45">
+  <div class="orvia-splash-mark"><img src="/icons/orvia45-512.png" alt=""><strong>ORVIA 45</strong><small>ENSEMBLE, PLUS LOIN</small></div>
+</div>
+<div id="auth-gate" class="auth-gate">
+ <section class="auth-card" aria-labelledby="auth-title">
+  <div class="auth-brand">ORVIA 45</div>
+  <h2 id="auth-title">Bienvenue</h2>
+  <p class="muted" id="auth-description">Connectez-vous à votre compte ORVIA 45.</p>
+  <form id="user-login-form" class="form-screen">
+   <label>Numéro de téléphone ou adresse e-mail</label><input name="login" autocomplete="username" required maxlength="254" placeholder="Téléphone ou e-mail">
+   <label>Mot de passe</label><input name="password" type="password" autocomplete="current-password" required minlength="6" maxlength="200" placeholder="6 caractères minimum">
+   <button class="primary" type="submit">Se connecter</button>
+  </form>
+  <form id="user-register-form" class="form-screen" hidden>
+   <label>Nom d’utilisateur</label><input name="name" autocomplete="username" required minlength="2" maxlength="80" placeholder="Votre nom d’utilisateur">
+   <label>Numéro de téléphone</label><input name="phone" type="tel" autocomplete="tel" inputmode="tel" required minlength="8" maxlength="20" placeholder="Votre numéro de téléphone">
+   <label>Adresse e-mail (facultative)</label><input name="email" type="email" autocomplete="email" maxlength="254" placeholder="nom@exemple.com (facultatif)">
+   <label>Mot de passe (6 caractères minimum)</label><input name="password" type="password" autocomplete="new-password" required minlength="6" maxlength="200" placeholder="6 caractères minimum">
+   <label for="register-ref">Code de parrainage (facultatif)</label><input id="register-ref" name="ref" type="text" maxlength="40" autocomplete="off" placeholder="Saisir le code de votre parrain">
+   <p id="register-ref-hint" class="muted" aria-live="polite"></p>
+   <button class="primary" type="submit">Créer mon compte</button>
+  </form>
+  <p id="auth-error" class="auth-error" role="alert"></p>
+  <button id="auth-switch" class="auth-switch" type="button">Créer un compte</button>
+  <p class="auth-hint">Vous avez déjà un compte ? Choisissez « J’ai déjà un compte » pour vous connecter.</p>
+ </section>
+</div>
+<header class="top"><div class="brand">ORVIA 45</div><div class="top-actions"><button id="notice" aria-label="Notifications">♧</button><button id="language">FR</button></div></header>
+<main>
+<section id="home" class="page active">
+  <div class="hero">
+    <div class="hero-head"><span>Portefeuille d'abonnement</span><span>Portefeuille de gains</span></div>
+    <div class="balances"><strong id="subscription">0</strong><strong id="earnings">0</strong></div>
+    <div class="daily">▣ &nbsp; Activez votre tâche pour collecter votre salaire quotidien</div>
+  </div>
+  <div class="banner"><div class="chip-art">S</div><div><small>BIENVENUE SUR</small><h1>ORVIA 45</h1><p>Votre espace personnel</p></div></div>
 
-<div id="p-accueil" class="page active">
-<div class="header"><b>ORVIA45</b> <span style="float:right;background:rgba(212,175,55,0.2);border:1px solid #D4AF37;padding:3px 8px;border-radius:20px;color:#D4AF37;font-size:11px">DEMO</span>
-<div class="portefeuille" style="margin-top:12px"><div><small>Portefeuille Abonnement IA</small><br><b>0 XOF</b></div><div><small>Portefeuille Gains</small><br><b>0 XOF</b></div><div class="full"><span>Atteignez niveau pour consulter infos</span><span>ALLER →</span></div></div></div>
-<div class="icons">
-<div class="icon-item" onclick="alert('Fonction demo non active')"><i class="fa-solid fa-wallet"></i><br><span style="font-size:11px">Dépôt<br><small style="color:red">(non actif)</small></span></div>
-<div class="icon-item" onclick="alert('Fonction demo non active')"><i class="fa-solid fa-money-bill-transfer"></i><br><span style="font-size:11px">Retrait<br><small style="color:red">(non actif)</small></span></div>
-<div class="icon-item"><i class="fa-solid fa-crown"></i><br><span style="font-size:11px">VIP</span></div>
-<div class="icon-item"><i class="fa-solid fa-link"></i><br><span style="font-size:11px">Lien d'invitation</span></div>
-<div class="icon-item"><i class="fa-solid fa-building"></i><br><span style="font-size:11px">Profil entreprise</span></div>
-<div class="icon-item"><i class="fa-solid fa-certificate"></i><br><span style="font-size:11px">Certificat</span></div>
-</div>
-<div class="banner"><h2>Centre<br>d'activités</h2><small style="background:#FFD700;color:#000;padding:4px 10px;border-radius:20px;font-size:10px">ORVIA45 Phase test</small><div style="font-size:11px;margin-top:8px">Interface inspirée - Maquette educative sans transaction reelle</div></div>
-<div class="tasks"><h3 style="font-size:13px">Centre de Tâches <span class="badge no">SIMULATION</span></h3>
-<div class="task"><div><b style="font-size:12px">Recompenses d'inscription</b><br><small style="color:#888">Tache decouverte</small></div><span class="badge ok">Terminé</span></div>
-<div class="task"><div><b style="font-size:12px">Enregistrement quotidien</b><br><small style="color:#888">Connexion (demo)</small></div><span class="badge ok">Terminé</span></div>
-<div class="task"><div><b style="font-size:12px">Premiere Recompense Location</b><br><small style="color:#888">Test produit formel (simulation)</small></div><span class="badge no">Incomplet</span></div>
-<div class="btn-demo">Ces taches sont exemples visuels. Aucun paiement reel.</div>
-</div>
-</div>
-
-<div id="p-ia" class="page">
-<div class="header"><b>IA - Produits en test</b><div style="font-size:11px;color:#9AA0B5;margin-top:6px">Tous produits en phase maquette. Aucun achat reel possible.</div></div>
-<div class="product"><div style="width:90px;background:#0F1423;color:#D4AF37;display:flex;align-items:center;justify-content:center;font-weight:900">ORVIA LABS</div><div class="product-info"><span style="background:#FFE5E5;color:#C00;font-size:9px;padding:3px 6px;border-radius:4px">EXPERIENCE - SIMULATION</span><br><b style="font-size:12px">ORVIA Astera Labs 6.0 - 60Jour DEMO</b><div style="font-size:11px;margin-top:6px">Montant indicatif (simulé): <b>15000</b> | Statut: <b style="color:red">Non actif</b></div><div class="btn-demo">Achat desactive - Maquette uniquement</div></div></div>
-<div class="product"><div style="width:90px;background:#1A1A1A;color:#fff;display:flex;align-items:center;justify-content:center">TEST</div><div class="product-info"><b style="font-size:12px">ORVIA Duree essai 1Jour</b><div style="font-size:11px">Montant test: 3000 | Limite: 0 (demo)</div><div class="btn-demo">Voir details (demo)</div></div></div>
-<div class="product"><div style="width:90px;background:#0F1423;color:#D4AF37;display:flex;align-items:center;justify-content:center">ORVIA</div><div class="product-info"><b style="font-size:12px">ORVIA1.0 - 2Jour Exemple UI</b><div style="font-size:11px">Statut: Maquette | Aucun rendement garanti</div><div class="btn-demo">Simulation visuelle uniquement</div></div></div>
-<div style="background:#FFF8E1;border:1px solid #FFE082;margin:12px;border-radius:10px;padding:12px;font-size:11px">Important: Produits maquettes visuelles. Aucun profit garanti. Aucun depot reel possible. Conforme doc ORVIA45.</div>
-</div>
-
-<div id="p-equipe" class="page">
-<div class="header"><b>Gestion d'Equipe</b></div>
-<div style="background:#fff;padding:12px"><button style="background:#0F1423;color:#fff;border:none;padding:8px 14px;border-radius:8px;width:100%">Rechercher (demo)</button></div>
-<div style="background:#fff;margin:12px;border-radius:12px;padding:14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px"><div style="background:#F9FAFB;padding:10px;border-radius:8px">Recharge Equipe<br><b>0</b></div><div style="background:#F9FAFB;padding:10px;border-radius:8px">Recompenses recommandation<br><b>0 - Demo</b></div></div>
-<div style="margin-top:12px;font-size:11px;background:#FFFBEB;border:1px dashed #D4AF37;padding:8px;border-radius:8px">Taux PDF: N1 15% / N2 5% / N3 3% - Non confirmes, non payables - Simulation uniquement</div></div>
-</div>
-
-<div id="p-pub" class="page"><div class="header"><b>Publication</b></div><div style="background:#fff;margin:10px;border-radius:12px;padding:12px"><b style="font-size:13px">Conference ORVIA (maquette)</b><div style="margin-top:10px;background:#1A1A1A;color:#FFD700;padding:20px;border-radius:8px;text-align:center">Image conference - Exemple</div></div></div>
-
-<div id="p-moi" class="page">
-<div style="background:linear-gradient(180deg,#0F1423,#1A2238);color:#fff;padding:20px;text-align:center"><div style="width:60px;height:60px;background:#D4AF37;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900">918</div><div style="margin-top:8px"><b>91851536</b> <span style="background:#D4AF37;color:#000;padding:2px 8px;border-radius:20px;font-size:10px">Stagiaire DEMO</span></div></div>
-<div style="display:grid;grid-template-columns:repeat(4,1fr);background:#fff;padding:12px;text-align:center;border-bottom:1px solid #EEE;font-size:11px"><div><b>0</b><br><small>Revenu total</small></div><div><b>0</b><br><small>Quotidien</small></div><div><b>0</b><br><small>Mensuel</small></div><div><b>0</b><br><small>Profits</small></div></div>
-<div style="margin:12px;background:#0F1423;color:#D4AF37;border-radius:10px;padding:12px;font-size:11px"><b>ORVIA45:</b> Site maquette demonstration. Depots, retraits non actives. Aucun benefice garanti.</div>
-</div>
-
-<div class="bottom-nav">
-<div class="nav-item active" onclick="showPage('p-accueil',this)"><i class="fa-solid fa-house"></i><br>Accueil</div>
-<div class="nav-item" onclick="showPage('p-ia',this)"><i class="fa-solid fa-chart-line"></i><br>IA</div>
-<div class="nav-item" onclick="showPage('p-equipe',this)"><i class="fa-solid fa-users"></i><br>Equipe</div>
-<div class="nav-item" onclick="showPage('p-pub',this)"><i class="fa-regular fa-newspaper"></i><br>Publication</div>
-<div class="nav-item" onclick="showPage('p-moi',this)"><i class="fa-regular fa-user"></i><br>Moi</div>
-</div>
-<script>
-function showPage(id,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));el.classList.add('active');window.scrollTo(0,0);}
-</script>
-</body>
-</html>
+  <button class="orvia-vip-promo" type="button" data-tab="vip" aria-label="Découvrir les niveaux VIP ORVIA 45">
+    <span class="orvia-vip-promo-copy"><small>ORVIA 45 · ESPACE VIP</small><strong>Découvrez les niveaux VIP</strong><span>Voir les avantages <b>→</b></span></span>
+    <span class="orvia-vip-promo-mark" aria-hidden="true">♛</span>
+  </button>
+  <div class="quick">
+    <button data-action="deposit"><b>＋</b>Dépôt</button><button data-action="withdraw"><b>↗</b>Retrait</button><button data-tab="products"><b>▦</b>Produits</button>
+    <button data-tab="team"><b>♧</b>Lien d'invitation</button><button data-tab="rewards"><b>★</b>CRYPTO</button><button data-tab="account"><b>♙</b>Mon compte</button>
+  </div>
+  <div class="home-shortcuts">
+    
+    <button class="home-shortcut" data-action="support"><span class="shortcut-icon">🎧</span><span>Service Client</span><b>›</b></button>
+    <button class="home-shortcut vip-home-shortcut" data-tab="vip"><span class="shortcut-icon">👑</span><span>Espace VIP</span><b>›</b></button>
+  </div>
+  <section class="home-block"><h2>Retraits réussis</h2><div id="withdrawal-records" class="withdrawal-records" aria-live="polite" aria-label="Retraits réussis"></div></section>
+  <section class="home-block partners"><h2>Marques Partenaires</h2><div class="partner-logos"><a href="https://facebook.com" aria-label="Facebook" target="_blank" rel="noopener"><span class="logo-facebook">f</span><b>Facebook</b></a><a href="#" data-whatsapp-link aria-label="WhatsApp" rel="noopener"><span class="logo-whatsapp">◉</span><b>WhatsApp</b></a><a href="https://telegram.org" aria-label="Telegram" target="_blank" rel="noopener"><span class="logo-telegram">➤</span><b>Telegram</b></a><a href="https://www.google.com/" aria-label="Ouvrir Google" target="_blank" rel="noopener noreferrer"><span class="logo-google">G</span><b>Google</b></a></div><p>Contactez-nous via ces plateformes</p></section>
+  <a class="floating-whatsapp" href="#" data-whatsapp-link aria-label="Contacter sur WhatsApp">◉</a>
+  <button class="floating-manager" data-action="support"><span class="manager-avatar">🎧</span><span>Manager</span></button>
+</section>
+<section id="vip" class="page">
+  <div class="subhead"><button class="back" data-tab="home">‹</button><span>ESPACE VIP</span><span>👑</span></div>
+  <p class="muted vip-intro">Consultez les niveaux VIP, leurs objectifs et les avantages associés.</p>
+  <div class="vip-current panel"><span>Mon niveau actuel</span><strong id="vip-current-level">À déterminer</strong><small>Votre progression dépend des conditions validées par ORVIA 45.</small></div>
+  <div id="vip-levels" class="vip-levels" aria-label="Niveaux VIP"></div>
+  <p class="muted vip-disclaimer">Les avantages et rémunérations sont soumis aux conditions officielles et aux validations requises. Les objectifs non communiqués ne sont pas inventés.</p>
+</section>
+<section id="rewards" class="page">
+  <div class="ia-heading"><div><p class="muted">Découvrez les offres et consultez leurs conditions avant de souscrire.</p></div><button class="ia-subscription" data-tab="products">▣ Abonnement</button></div>
+  <nav class="ia-categories" aria-label="Catégories CRYPTO" role="tablist">
+    <button class="ia-category active" role="tab" aria-selected="true" data-ia-category="ia">CRYPTO</button>
+    <button class="ia-category" role="tab" aria-selected="false" data-ia-category="super">SUPER CRYPTO</button>
+    <button class="ia-category" role="tab" aria-selected="false" data-ia-category="limited">Temps limité</button>
+    <button class="ia-category" role="tab" aria-selected="false" data-ia-category="daily">Produits de revenu quotidien</button>
+    <button class="ia-category" role="tab" aria-selected="false" data-ia-category="team">Produit d'équipe</button>
+  </nav>
+  <div id="ia-products" class="products ia-products"><article class="panel"><p class="muted">Chargement des offres…</p></article></div>
+  <p class="muted ia-note">Les conditions affichées sont celles de l’offre publiée. Une souscription confirmée conserve ses conditions initiales.</p>
+</section>
+<section id="products" class="page"><h2>Produits</h2><p class="muted">Consultez les offres publiées et leurs conditions.</p><div id="all-products" class="products"></div></section>
+<section id="team" class="page"><h2>Gestion d'équipe</h2><article class="panel"><h3>Mon lien d'invitation</h3><p class="muted">Partagez ce lien. Le parrain est associé automatiquement lors de la création du compte.</p><div class="copyline"><input id="invite" readonly><button class="primary" id="copy">Copier</button></div></article><article class="panel"><h3>Mon équipe</h3><p class="muted">Votre équipe est organisée sur trois niveaux. Les récompenses éventuelles sont calculées uniquement après validation administrative du premier investissement d’un filleul.</p></article><article class="panel"><h3>Aperçu des données</h3><div class="stats"><div>Membres d'équipe<strong>0</strong></div><div>Niveau 1<strong>0</strong></div><div>Niveau 2<strong>0</strong></div><div>Niveau 3<strong>0</strong></div></div></article><article class="panel"><h3>Mes filleuls</h3><div id="team-members"><p class="muted">Les membres de votre équipe apparaîtront ici.</p></div></article></section>
+<section id="publications" class="page"><div class="section-title"><h2>Actualités ORVIA 45</h2></div><div class="publication-feed"><article class="empty"><p>Chargement des publications…</p></article></div></section>
+<section id="account" class="page">
+  <div class="profile"><div class="avatar" id="main-avatar">👤</div><div><strong id="username">Utilisateur ORVIA 45</strong><small>ID : <span id="user-id">SM-000001</span></small></div><button class="settings" data-action="settings">⚙</button></div>
+  <div class="stats four"><div>Revenu total<strong>0</strong></div><div>Revenu quotidien<strong>0</strong></div><div>Revenu mensuel<strong>0</strong></div><div>Profits total<strong>0</strong></div></div>
+  <div class="account-section-label">Mes espaces et services</div>
+  <div class="account-grid">
+    <button class="account-option account-ai" type="button" data-open-category="ia"><b>✦</b><span>IA</span></button>
+    <button class="account-option" type="button" data-open-category="super"><b>♛</b><span>SUPER IA</span></button>
+    <button class="account-option" type="button" data-open-category="limited"><b>◷</b><span>Temps limité</span></button>
+    <button class="account-option" type="button" data-open-category="daily"><b>▣</b><span>Revenu quotidien</span></button>
+    <button class="account-option" type="button" data-open-category="team"><b>♧</b><span>Produit d'équipe</span></button>
+    <button class="account-option" type="button" data-action="my-products"><b>▤</b><span>Mes produits</span></button>
+    <button class="account-option" type="button" data-action="history"><b>↔</b><span>Historique financier</span></button>
+    <button class="account-option" type="button" data-tab="team"><b>＋</b><span>Inviter des amis</span></button>
+    <button class="account-option" type="button" data-action="support"><b>◉</b><span>Service client</span></button>
+  </div>
+  <div class="menu"><button data-action="settings">⚙ Paramètres <span>›</span></button><button data-action="download">⇩ Télécharger l'APP <span>›</span></button><button data-action="logout">↪ Se déconnecter <span>›</span></button></div>
+</section>
+<section id="settings" class="page"><div class="subhead"><button class="back" data-tab="account">‹</button><span>Paramètres</span><span></span></div><div class="settings-menu"><button data-action="profile"><span>Photo de profil</span><b>›</b></button><button data-action="password"><span>Mot de passe de connexion</span><b>›</b></button><button data-action="wallet"><span>Lier le portefeuille</span><b>›</b></button><button data-action="pin"><span>Mot de passe de retrait</span><b>›</b></button></div></section>
+</main>
+<nav class="bottom"><button class="selected" data-tab="home">⌂<span>Accueil</span></button><button data-tab="rewards">♜<span>CRYPTO</span></button><button data-tab="team">♧<span>Équipe</span></button><button data-tab="publications">▤<span>Publication</span></button><button data-tab="account">♙<span>Mon compte</span></button></nav>
+<div id="modal" class="modal"><div class="dialog"><button class="close" id="close">×</button><h2 id="modal-title">Opération</h2><div id="modal-body"></div></div></div>
+<div id="toast" class="toast"></div>
+<script src="splash.js"></script><script src="app.js"></script><script src="support-links.js"></script><script src="home-records.js"></script><script src="password-toggle.js"></script>
+<script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js').catch(() => {})); }</script>
+</body></html>

@@ -1,0 +1,568 @@
+'use strict';
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { Pool } = require('pg');
+
+const ROOT = __dirname;
+const PORT = Number(process.env.PORT || 3000);
+const DATABASE_URL = process.env.DATABASE_URL;
+const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: true } : undefined, max: 10 }) : null;
+const MIME = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.json':'application/json; charset=utf-8', '.webmanifest':'application/manifest+json; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.jpg':'image/jpeg', '.webp':'image/webp' };
+const sessions = new Map(); // Rate-limit/session cache only; persistent sessions are stored hashed in PostgreSQL.
+const attempts = new Map();
+const COOKIE = 'smile_session'; // Session utilisateur (compatibilité avec les anciennes versions).
+const ADMIN_COOKIE = 'smile_admin_session'; // Session indépendante de l’administration.
+const ADMIN_DEVICE_COOKIE = 'orvia_admin_device'; // Appareil de confiance, autorisé explicitement par un admin connecté.
+const ADMIN_DEVICE_DAYS = 180;
+const SESSION_DAYS = 7;
+// Mode manuel : les demandes Flooz/TMoney sont saisies par les membres puis vérifiées par l'administrateur.
+// Aucun appel API ni transfert automatique n'est effectué par SMILE.
+const MOBILE_MONEY_ENABLED = process.env.MOBILE_MONEY_ENABLED !== 'false'; // Activé par défaut; aucune opération n'est exécutée ou approuvée automatiquement.
+// Aucun compte invité ni jeu de données fictives n'est créé au démarrage.
+
+function json(res, status, data, headers={}) { res.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', ...headers }); res.end(JSON.stringify(data)); }
+function parseCookies(req) { const out={}; for(const part of (req.headers.cookie||'').split(';')){const i=part.indexOf('=');if(i<1)continue;try{out[part.slice(0,i).trim()]=decodeURIComponent(part.slice(i+1).trim())}catch{/* Ignore les cookies malformés. */}} return out; }
+function readBody(req, maxBytes=1024*1024) { return new Promise((resolve,reject)=>{const chunks=[];let size=0,failed=false;req.on('data',chunk=>{if(failed)return;size+=chunk.length;if(size>maxBytes){failed=true;reject(Object.assign(new Error('Payload trop volumineux.'),{statusCode:413}));req.resume();return}chunks.push(chunk)});req.on('end',()=>{if(failed)return;try{const raw=Buffer.concat(chunks).toString('utf8');resolve(raw?JSON.parse(raw):{})}catch{reject(Object.assign(new Error('JSON invalide.'),{statusCode:400}))}});req.on('error',reject)}); }
+function hashToken(v) { return crypto.createHash('sha256').update(v).digest('hex'); }
+function passwordHash(password, salt=crypto.randomBytes(16).toString('hex')) { return new Promise((resolve,reject)=>crypto.scrypt(password,salt,64,(e,key)=>e?reject(e):resolve({salt,hash:key.toString('hex')}))); }
+function safeEqual(a,b) { const x=Buffer.from(a||''), y=Buffer.from(b||''); return x.length===y.length && crypto.timingSafeEqual(x,y); }
+function rateLimit(req,res) { const ip=req.socket.remoteAddress||'unknown', now=Date.now(), old=(attempts.get(ip)||[]).filter(t=>now-t<15*60*1000); if(old.length>=12){json(res,429,{error:'Trop de tentatives. Réessayez plus tard.'});return false} old.push(now);attempts.set(ip,old);return true; }
+async function getUser(req, role) {
+ if(!pool)return null;
+ const cookies=parseCookies(req);
+ const requestedRole=role || new URL(req.url,'http://localhost').searchParams.get('space');
+ // Les deux espaces utilisent des cookies distincts. L’ancien cookie est accepté
+ // uniquement pour retrouver une session administrateur créée avant cette version.
+ let token=requestedRole==='admin'?(cookies[ADMIN_COOKIE]||cookies[COOKIE]):cookies[COOKIE];
+ if(!token)return null;
+ const q=await pool.query(`SELECT u.id,u.public_id,u.name,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`,[hashToken(token)]);
+ const user=q.rows[0]||null;
+ if(requestedRole==='admin'&&user?.role!=='admin')return null;
+ if(requestedRole==='user'&&user?.role!=='user')return null;
+ return user;
+}
+async function requireUser(req,res,role) { const user=await getUser(req,role); if(!user){json(res,401,{error:'Connexion requise.'});return null} if(role && user.role!==role){json(res,403,{error:'Accès non autorisé.'});return null} return user; }
+async function createSession(userId,role,res) {
+ const token=crypto.randomBytes(32).toString('base64url'), expires=new Date(Date.now()+SESSION_DAYS*86400000);
+ await pool.query('INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,$3)',[userId,hashToken(token),expires]);
+ const cookieName=role==='admin'?ADMIN_COOKIE:COOKIE;
+ res.setHeader('Set-Cookie',`${cookieName}=${encodeURIComponent(token)}; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS*86400}`);
+}
+async function ensureSchema() { if(!pool) return; const sql=fs.readFileSync(path.join(ROOT,'schema.sql'),'utf8'); await pool.query(sql);
+ await pool.query(`CREATE TABLE IF NOT EXISTS trusted_admin_devices (id BIGSERIAL PRIMARY KEY, admin_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash CHAR(64) NOT NULL UNIQUE, label VARCHAR(160), created_at TIMESTAMPTZ NOT NULL DEFAULT now(), last_used_at TIMESTAMPTZ, expires_at TIMESTAMPTZ NOT NULL)`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS category VARCHAR(16) NOT NULL DEFAULT 'ia' CHECK(category IN ('ia','super','limited','daily','team'))`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT true`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS purchase_enabled BOOLEAN NOT NULL DEFAULT true`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS removed BOOLEAN NOT NULL DEFAULT false`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS sale_start_at TIMESTAMPTZ`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS sale_end_at TIMESTAMPTZ`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservation_amounts_cfa JSONB NOT NULL DEFAULT '[]'::jsonb`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS product_wallet_balance_cfa BIGINT NOT NULL DEFAULT 0 CHECK(product_wallet_balance_cfa>=0)`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservations_remaining INTEGER NOT NULL DEFAULT 0 CHECK(reservations_remaining>=0)`);
+ await pool.query(`ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS limited_deleted_at TIMESTAMPTZ`);
+ // Initialisation unique des 10 cartes SUPER IA VIP dorées. L’administrateur pourra ensuite les modifier librement.
+ await pool.query(`CREATE TABLE IF NOT EXISTS app_migrations (migration_key VARCHAR(120) PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+ const vipMigration = await pool.query(`INSERT INTO app_migrations(migration_key) VALUES('super-ai-vip-gold-art-v1') ON CONFLICT DO NOTHING RETURNING migration_key`);
+ if (vipMigration.rowCount) {
+  const vip = [
+   ['SMILE-SUPER-IA-00','SMILE VIP 1.0',26000,36400,'/uploads/offers/8b635058-f93c-4ad1-8681-ebf77aab2c8b.jpg'],
+   ['SMILE-SUPER-IA-01','SMILE VIP 2.0',37000,55500,'/uploads/offers/29e01b1a-b2f4-4c32-8c0c-30e9d144a70a.jpg'],
+   ['SMILE-SUPER-IA-02','SMILE VIP 3.0',77000,123200,'/uploads/offers/96ecd59e-f667-417a-afef-3b4b6e0313d0.jpg'],
+   ['SMILE-SUPER-IA-03','SMILE VIP 4.0',154000,308000,'/uploads/offers/57a57acd-4c10-47b6-a8b6-199330c687a6.jpg'],
+   ['SMILE-SUPER-IA-04','SMILE VIP 5.0',310000,775000,'/uploads/offers/c0193612-dc36-4e13-99fe-d79b6d560d50.jpg'],
+   ['SMILE-SUPER-IA-05','SMILE VIP 6.0',550000,1650000,'/uploads/offers/28536e6d-c53d-4161-9248-8a490aed818d.jpg'],
+   ['SMILE-SUPER-IA-06','SMILE VIP 7.0',880000,3080000,'/uploads/offers/9afa2524-57d4-4ac8-b011-eae8c362bb26.jpg'],
+   ['SMILE-SUPER-IA-07','SMILE VIP 8.0',1800000,9000000,'/uploads/offers/9ae708ec-0566-4938-8aac-e0be1281c22a.jpg'],
+   ['SMILE-SUPER-IA-08','SMILE VIP 9.0',3100000,18600000,'/uploads/offers/3d3bad13-4d2e-414f-998c-1efe1f9a2d6a.jpg'],
+   ['SMILE-SUPER-IA-09','SMILE VIP 10.0',4400000,30800000,'/uploads/offers/ea1db54c-bafb-4c97-9fae-c7856632aff4.jpg']
+  ];
+  const c = await pool.connect();
+  try {
+   await c.query('BEGIN');
+   for (const [code,name,min,value,imageUrl] of vip) {
+    await c.query(`INSERT INTO investment_offers(code,name,description,category,duration_label,min_amount_cfa,display_value_cfa,default_user_limit,active,stock_limit,image_url,published)
+      VALUES($1,$2,'Produit SUPER IA VIP — illustration dorée personnalisable depuis l’administration.','super','2 jours',$3,$4,1,true,NULL,$5,false)
+      ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,category='super',duration_label='2 jours',min_amount_cfa=EXCLUDED.min_amount_cfa,display_value_cfa=EXCLUDED.display_value_cfa,image_url=EXCLUDED.image_url,active=true,published=false,updated_at=now()`,[code,name,min,value,imageUrl]);
+   }
+   await c.query('COMMIT');
+  } catch (e) { await c.query('ROLLBACK'); await pool.query(`DELETE FROM app_migrations WHERE migration_key='super-ai-vip-gold-art-v1'`); throw e; }
+  finally { c.release(); }
+ }
+ // Neutralise l'ancien produit de démonstration s'il existe déjà dans la base.
+ // On le retire du catalogue sans supprimer les réservations, achats ni écritures historiques.
+ await pool.query(`UPDATE investment_offers SET active=false,published=false,purchase_enabled=false,removed=true,updated_at=now() WHERE code='SM-LIMITED-279'`);
+ // Trois offres supplémentaires Temps Limité : création unique en brouillon, modifiables par l'administrateur.
+ // display_value_cfa représente le capital + profit attendu ; l'interface calcule le profit par différence.
+ const limitedBatchClient = await pool.connect();
+ try {
+  await limitedBatchClient.query('BEGIN');
+  const limitedBatchMigration = await limitedBatchClient.query(`INSERT INTO app_migrations(migration_key) VALUES('smile-limited-30-130-190-v1') ON CONFLICT DO NOTHING RETURNING migration_key`);
+  if (limitedBatchMigration.rowCount) {
+   const limitedProducts = [
+    ['SM-LIMITED-30D','SM Durée limitée 30 jours','30 jours',270000],
+    ['SM-LIMITED-130D','SM Durée limitée 130 jours','130 jours',720000],
+    ['SM-LIMITED-190D','SM Durée limitée 190 jours','190 jours',1120000]
+   ];
+   for (const [code,name,duration,expectedProfit] of limitedProducts) {
+    await limitedBatchClient.query(`INSERT INTO investment_offers(code,name,description,category,duration_label,min_amount_cfa,display_value_cfa,default_user_limit,active,stock_limit,published,purchase_enabled,removed,sale_start_at,sale_end_at,reservation_amounts_cfa,product_wallet_balance_cfa,reservations_remaining)
+     VALUES($1,$2,'Offre ORVIA 45 Temps Limité.','limited',$3,20000,$4,1,true,200,false,false,false,NULL,NULL,'[20000,50000,110000,180000]'::jsonb,0,3)
+     ON CONFLICT(code) DO NOTHING`,[code,name,duration,20000+expectedProfit]);
+   }
+  }
+  await limitedBatchClient.query('COMMIT');
+ } catch (e) { await limitedBatchClient.query('ROLLBACK'); throw e; }
+ finally { limitedBatchClient.release(); }
+ // Valeurs historiques des offres : appliquer une seule fois, puis laisser l'administration maître.
+ // La migration et ses UPDATE sont atomiques : un redémarrage ultérieur ne réécrit jamais les réglages.
+ const offerDefaultsClient = await pool.connect();
+ try {
+  await offerDefaultsClient.query('BEGIN');
+  const initialOfferDefaults = await offerDefaultsClient.query(`INSERT INTO app_migrations(migration_key) VALUES('smile-ia-initial-offer-defaults-v1') ON CONFLICT DO NOTHING RETURNING migration_key`);
+  if (initialOfferDefaults.rowCount) {
+   await offerDefaultsClient.query(`UPDATE investment_offers SET display_value_cfa = min_amount_cfa * (1 + CASE code WHEN 'SMILE-IA-01' THEN 0.50 WHEN 'SMILE-IA-02' THEN 0.55 WHEN 'SMILE-IA-03' THEN 0.55 WHEN 'SMILE-IA-04' THEN 0.60 WHEN 'SMILE-IA-05' THEN 0.62 WHEN 'SMILE-IA-06' THEN 0.65 WHEN 'SMILE-IA-07' THEN 0.70 WHEN 'SMILE-IA-08' THEN 0.90 WHEN 'SMILE-IA-09' THEN 1.50 WHEN 'SMILE-IA-10' THEN 2.00 WHEN 'SMILE-IA-11' THEN 3.00 WHEN 'SMILE-IA-12' THEN 5.00 WHEN 'SMILE-IA-13' THEN 7.00 ELSE NULL END)::bigint, updated_at=now() WHERE code IN ('SMILE-IA-01','SMILE-IA-02','SMILE-IA-03','SMILE-IA-04','SMILE-IA-05','SMILE-IA-06','SMILE-IA-07','SMILE-IA-08','SMILE-IA-09','SMILE-IA-10','SMILE-IA-11','SMILE-IA-12','SMILE-IA-13')`);
+   await offerDefaultsClient.query(`UPDATE investment_offers SET published=true WHERE code IN ('SMILE-IA-01','SMILE-IA-02','SMILE-IA-03','SMILE-IA-04','SMILE-IA-05','SMILE-IA-06','SMILE-IA-07','SMILE-IA-08','SMILE-IA-09')`);
+   await offerDefaultsClient.query(`UPDATE investment_offers SET published=false WHERE code IN ('SMILE-IA-10','SMILE-IA-11','SMILE-IA-12','SMILE-IA-13')`);
+  }
+  await offerDefaultsClient.query('COMMIT');
+ } catch (e) { await offerDefaultsClient.query('ROLLBACK'); throw e; }
+ finally { offerDefaultsClient.release(); }
+ await pool.query(`ALTER TABLE journal_lines DROP CONSTRAINT IF EXISTS journal_lines_account_code_check; ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_account_code_check CHECK(account_code IN ('cash_held','user_wallet_liability','investment_liability','withdrawal_payable','withdrawal_fee_revenue','commission_expense','investment_return_expense','investment_adjustment_revenue'))`);
+ // Migration des demandes encore en attente : elles sont débitées une seule fois au démarrage.
+ await pool.query(`INSERT INTO journal_transactions(event_key,event_type,user_id,amount_cfa,description) SELECT 'withdrawal:'||id||':requested','withdrawal_requested',user_id,amount_cfa,'Migration : réservation par débit immédiat du portefeuille' FROM withdrawals WHERE status IN ('pending','approved') ON CONFLICT(event_key) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) SELECT jt.id,'user_wallet_liability',w.amount_cfa,0 FROM journal_transactions jt JOIN withdrawals w ON jt.event_key='withdrawal:'||w.id||':requested' ON CONFLICT(transaction_id,account_code) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) SELECT jt.id,'withdrawal_payable',0,w.amount_cfa FROM journal_transactions jt JOIN withdrawals w ON jt.event_key='withdrawal:'||w.id||':requested' ON CONFLICT(transaction_id,account_code) DO NOTHING`);
+ // Reprise idempotente des anciennes opérations validées dans le grand livre.
+ await pool.query(`INSERT INTO journal_transactions(event_key,event_type,user_id,amount_cfa,description) SELECT 'deposit:'||id||':approved','deposit_approved',user_id,amount_cfa,'Reprise dépôt validé antérieurement' FROM deposits WHERE status='approved' ON CONFLICT(event_key) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) SELECT jt.id,'cash_held',d.amount_cfa,0 FROM journal_transactions jt JOIN deposits d ON jt.event_key='deposit:'||d.id||':approved' ON CONFLICT(transaction_id,account_code) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) SELECT jt.id,'user_wallet_liability',0,d.amount_cfa FROM journal_transactions jt JOIN deposits d ON jt.event_key='deposit:'||d.id||':approved' ON CONFLICT(transaction_id,account_code) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_transactions(event_key,event_type,user_id,amount_cfa,description) SELECT 'commission:'||id||':credited','referral_commission',beneficiary_id,amount_cfa,'Reprise commission de parrainage' FROM referral_commissions ON CONFLICT(event_key) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) SELECT jt.id,'commission_expense',rc.amount_cfa,0 FROM journal_transactions jt JOIN referral_commissions rc ON jt.event_key='commission:'||rc.id||':credited' ON CONFLICT(transaction_id,account_code) DO NOTHING`);
+ await pool.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) SELECT jt.id,'user_wallet_liability',0,rc.amount_cfa FROM journal_transactions jt JOIN referral_commissions rc ON jt.event_key='commission:'||rc.id||':credited' ON CONFLICT(transaction_id,account_code) DO NOTHING`);
+ if(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD){const email=process.env.ADMIN_EMAIL.toLowerCase().trim(), exists=await pool.query('SELECT id FROM users WHERE email=$1',[email]); if(!exists.rowCount){const p=await passwordHash(process.env.ADMIN_PASSWORD); await pool.query(`INSERT INTO users(public_id,name,email,password_hash,password_salt,role) VALUES($1,$2,$3,$4,$5,'admin')`,['SM-ADMIN',process.env.ADMIN_NAME||'Administrateur ORVIA 45',email,p.hash,p.salt]); console.log('Compte administrateur initial créé.');}}
+ if(process.env.CONTROL_ACCESS_PASSWORD){const exists=await pool.query('SELECT id FROM special_control_credentials WHERE id=1');if(!exists.rowCount){const h=await passwordHash(process.env.CONTROL_ACCESS_PASSWORD);await pool.query('INSERT INTO special_control_credentials(id,password_hash,password_salt) VALUES(1,$1,$2)',[h.hash,h.salt]);}}
+ for(const cfg of [{name:'controle1',phone:'90454545',env:'SPECIAL_ACCOUNT_1_PASSWORD',publicId:'SM-CONTROLE1'},{name:'controle2',phone:'91454545',env:'SPECIAL_ACCOUNT_2_PASSWORD',publicId:'SM-CONTROLE2'}]){const pass=process.env[cfg.env];if(!pass)continue;let q=await pool.query('SELECT id FROM users WHERE phone=$1 OR name=$2',[cfg.phone,cfg.name]);let uid;if(q.rowCount){uid=q.rows[0].id;await pool.query("UPDATE users SET name=$2,phone=$3,role='user' WHERE id=$1",[uid,cfg.name,cfg.phone]);}else{const h=await passwordHash(pass);const ins=await pool.query("INSERT INTO users(public_id,name,phone,password_hash,password_salt,role) VALUES($1,$2,$3,$4,$5,'user') RETURNING id",[cfg.publicId,cfg.name,cfg.phone,h.hash,h.salt]);uid=ins.rows[0].id;}await pool.query('INSERT INTO special_commission_accounts(user_id,active) VALUES($1,false) ON CONFLICT(user_id) DO NOTHING',[uid]);}
+ }
+
+async function postJournal(c,{eventKey,eventType,userId,amount,description,lines}) {
+ const totalDebit=lines.reduce((n,x)=>n+x.debit,0), totalCredit=lines.reduce((n,x)=>n+x.credit,0);
+ if(totalDebit!==totalCredit || totalDebit<=0) throw new Error('Écriture comptable déséquilibrée.');
+ const t=await c.query(`INSERT INTO journal_transactions(event_key,event_type,user_id,amount_cfa,description) VALUES($1,$2,$3,$4,$5) ON CONFLICT(event_key) DO NOTHING RETURNING id`,[eventKey,eventType,userId,amount,description]);
+ if(!t.rowCount) return false;
+ for(const l of lines) await c.query(`INSERT INTO journal_lines(transaction_id,account_code,debit_cfa,credit_cfa) VALUES($1,$2,$3,$4)`,[t.rows[0].id,l.account,l.debit||0,l.credit||0]);
+ return true;
+}
+function calculateDueAt(durationLabel, start=new Date()) {
+ const m=String(durationLabel||'').trim().match(/(\d+)\s*(jour|jours|j|semaine|semaines|mois|an|ans)/i);
+ if(!m) throw new Error('Durée invalide : utilisez un nombre de jours, semaines, mois ou années.');
+ const n=Number(m[1]), unit=m[2].toLowerCase(), d=new Date(start);
+ if(['jour','jours','j'].includes(unit)) d.setUTCDate(d.getUTCDate()+n);
+ else if(unit.startsWith('semaine')) d.setUTCDate(d.getUTCDate()+7*n);
+ else if(unit==='mois') d.setUTCMonth(d.getUTCMonth()+n);
+ else d.setUTCFullYear(d.getUTCFullYear()+n);
+ return d;
+}
+
+async function walletBalance(c,userId) {
+ const q=await c.query(`SELECT COALESCE(sum(credit_cfa-debit_cfa),0)::bigint balance FROM journal_lines jl JOIN journal_transactions jt ON jt.id=jl.transaction_id WHERE jl.account_code='user_wallet_liability' AND jt.user_id=$1`,[userId]);
+ return Number(q.rows[0].balance||0);
+}
+async function hasControlAccess(req,adminId){const token=parseCookies(req).smile_control;if(!token)return false;const q=await pool.query('SELECT 1 FROM special_control_sessions WHERE admin_user_id=$1 AND token_hash=$2 AND expires_at>now()',[adminId,hashToken(token)]);return !!q.rowCount;}
+async function requireControl(req,res){const admin=await requireUser(req,res,'admin');if(!admin)return null;if(!await hasControlAccess(req,admin.id)){json(res,403,{error:'Déverrouillez d’abord la rubrique Contrôle.'});return null;}return admin;}
+async function api(req,res,url) {
+ if(req.method==='POST' && url.pathname==='/api/admin/control/unlock'){const a=await requireUser(req,res,'admin');if(!a)return true;if(!rateLimit(req,res))return true;const b=await readBody(req),password=String(b.password||'');const row=await pool.query('SELECT password_hash,password_salt FROM special_control_credentials WHERE id=1');if(!row.rowCount){json(res,503,{error:'Mot de passe Contrôle non configuré. Ajoutez CONTROL_ACCESS_PASSWORD dans les variables serveur puis redémarrez.'});return true}const h=await passwordHash(password,row.rows[0].password_salt);if(!safeEqual(h.hash,row.rows[0].password_hash)){json(res,403,{error:'Mot de passe Contrôle incorrect.'});return true}const token=crypto.randomBytes(32).toString('base64url'),expires=new Date(Date.now()+30*60*1000);await pool.query('INSERT INTO special_control_sessions(admin_user_id,token_hash,expires_at) VALUES($1,$2,$3)',[a.id,hashToken(token),expires]);res.setHeader('Set-Cookie',`smile_control=${encodeURIComponent(token)}; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Strict; Path=/; Max-Age=1800`);json(res,200,{ok:true,expiresAt:expires});return true;}
+ if(req.method==='GET' && url.pathname==='/api/admin/control/accounts'){const a=await requireControl(req,res);if(!a)return true;const q=await pool.query(`SELECT sc.id special_account_id,sc.active,u.id user_id,u.name,u.phone,u.public_id,COALESCE(w.balance,0)::bigint balance,COALESCE(cm.total,0)::bigint commissions_total,COALESCE(cm.count,0)::int commissions_count FROM special_commission_accounts sc JOIN users u ON u.id=sc.user_id LEFT JOIN (SELECT user_id,sum(credit_cfa-debit_cfa) balance FROM journal_lines jl JOIN journal_transactions jt ON jt.id=jl.transaction_id WHERE jl.account_code='user_wallet_liability' GROUP BY user_id) w ON w.user_id=u.id LEFT JOIN (SELECT special_account_id,sum(amount_cfa) FILTER(WHERE status='credited') total,count(*) FILTER(WHERE status='credited') count FROM special_commissions GROUP BY special_account_id) cm ON cm.special_account_id=sc.id ORDER BY sc.id`);json(res,200,{accounts:q.rows});return true;}
+ if(req.method==='POST' && /^\/api\/admin\/control\/accounts\/\d+\/status$/.test(url.pathname)){const a=await requireControl(req,res);if(!a)return true;const id=Number(url.pathname.split('/')[5]),b=await readBody(req);if(typeof b.active!=='boolean'){json(res,400,{error:'Statut invalide.'});return true}const c=await pool.connect();try{await c.query('BEGIN');const q=await c.query('UPDATE special_commission_accounts SET active=$2,updated_at=now() WHERE id=$1 RETURNING id,active',[id,b.active]);if(!q.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Compte spécial introuvable.'});return true}await c.query('INSERT INTO special_control_audit(actor_id,special_account_id,action,details) VALUES($1,$2,$3,$4)',[a.id,id,b.active?'activated':'deactivated',JSON.stringify({active:b.active})]);await c.query('COMMIT');json(res,200,{account:q.rows[0]});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+ if(req.method==='GET' && url.pathname==='/api/admin/control/commissions'){const a=await requireControl(req,res);if(!a)return true;const q=await pool.query(`SELECT sc.id,sc.special_account_id,u.name account_name,sc.deposit_id,sc.depositor_user_id,du.name depositor_name,du.phone depositor_phone,sc.rate_basis_points,sc.amount_cfa,sc.status,sc.created_at FROM special_commissions sc JOIN special_commission_accounts ca ON ca.id=sc.special_account_id JOIN users u ON u.id=ca.user_id JOIN users du ON du.id=sc.depositor_user_id ORDER BY sc.created_at DESC LIMIT 300`);const audit=await pool.query(`SELECT a.id,a.action,a.details,a.created_at,u.name actor_name,ca.id special_account_id,su.name account_name FROM special_control_audit a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN special_commission_accounts ca ON ca.id=a.special_account_id LEFT JOIN users su ON su.id=ca.user_id ORDER BY a.created_at DESC LIMIT 300`);json(res,200,{commissions:q.rows,audit:audit.rows});return true;}
+
+ if(!pool){json(res,503,{error:'Base de données non configurée. Définissez DATABASE_URL et redémarrez ORVIA 45.'});return true}
+ if(req.method==='GET' && url.pathname==='/api/health'){json(res,200,{status:'ok',database:'connected'});return true}
+ if(req.method==='GET' && url.pathname==='/api/public/preview-offers'){const q=await pool.query(`SELECT id,name,description,category,duration_label,min_amount_cfa,display_value_cfa,active,published,image_url,sale_start_at,sale_end_at FROM investment_offers WHERE active=true AND published=true AND removed=false AND (category<>'limited' OR sale_end_at IS NULL OR sale_end_at>now()) ORDER BY id`);json(res,200,{offers:q.rows});return true}
+ if(req.method==='POST' && ['/api/auth/register','/api/auth/login'].includes(url.pathname)){
+  if(!pool){json(res,503,{error:'Inscription indisponible : la base de données PostgreSQL n’est pas configurée. L’administrateur doit définir DATABASE_URL sur l’hébergement.'});return true}
+  if(!rateLimit(req,res))return true;
+  const b=await readBody(req); const email=String(b.email||'').trim().toLowerCase(), phone=String(b.phone||'').replace(/[\s-]/g,''), login=String(b.login||b.email||'').trim().toLowerCase(), password=String(b.password||'');
+  if(password.length<(url.pathname.endsWith('/register')?6:1)||password.length>200){json(res,400,{error:'Le mot de passe doit contenir au moins 6 caractères.'});return true}
+  if(url.pathname.endsWith('/register')){
+   const name=String(b.name||'').trim(); if(name.length<2||name.length>80||!/^\+?[0-9]{8,15}$/.test(phone)|| (email&&!/^\S+@\S+\.\S+$/.test(email))){json(res,400,{error:'Nom d’utilisateur, numéro de téléphone ou adresse e-mail invalide.'});return true}
+   const client=await pool.connect(); try { await client.query('BEGIN'); const existing=await client.query(`SELECT id FROM users WHERE phone=$1 OR ($2<>'' AND email=$2)`,[phone,email]); if(existing.rowCount){await client.query('ROLLBACK');json(res,409,{error:'Ce numéro de téléphone ou cette adresse e-mail est déjà utilisé.'});return true}
+    let sponsor=null; const ref=String(b.ref||'').trim(); if(ref){const q=await client.query("SELECT id FROM users WHERE public_id=$1 AND role='user' AND status='active'",[ref]); if(!q.rowCount){await client.query('ROLLBACK');json(res,400,{error:'Code de parrainage invalide ou parrain indisponible. Vérifiez le code ou laissez le champ vide.'});return true;} sponsor=q.rows[0].id;}
+    const p=await passwordHash(password), publicId='SM-'+crypto.randomBytes(5).toString('hex').toUpperCase(); const ins=await client.query(`INSERT INTO users(public_id,name,email,phone,password_hash,password_salt,sponsor_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,public_id,name,email,phone,role`,[publicId,name,email||null,phone,p.hash,p.salt,sponsor]); await client.query('COMMIT'); await createSession(ins.rows[0].id,'user',res); json(res,201,{user:ins.rows[0],referralLinked:!!sponsor}); return true;
+   } catch(e){await client.query('ROLLBACK');throw e} finally{client.release()}
+  }
+  const q=await pool.query('SELECT * FROM users WHERE (email=$1 OR phone=$2) AND status=$3',[login,login.replace(/[\s-]/g,''),'active']); const u=q.rows[0]; if(!u){json(res,401,{error:'Identifiants incorrects.'});return true} const p=await passwordHash(password,u.password_salt); if(!safeEqual(p.hash,u.password_hash)){json(res,401,{error:'Identifiants incorrects.'});return true} const requestedSpace=new URL(req.url,'http://localhost').searchParams.get('space')||'user';if(requestedSpace==='admin'&&u.role!=='admin'){json(res,403,{error:'Ce compte ne dispose pas des droits administrateur. Utilisez votre accès utilisateur.'});return true}if(requestedSpace==='user'&&u.role!=='user'){json(res,403,{error:'Ce compte est administrateur. Utilisez le lien d’accès administrateur.'});return true} await createSession(u.id,u.role,res); json(res,200,{user:{id:u.id,public_id:u.public_id,name:u.name,email:u.email,phone:u.phone,role:u.role}});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/device/trust'){
+  const admin=await requireUser(req,res,'admin');if(!admin)return true;
+  const token=crypto.randomBytes(48).toString('base64url'),expires=new Date(Date.now()+ADMIN_DEVICE_DAYS*86400000);
+  const label=String(req.headers['user-agent']||'Appareil').slice(0,150);
+  await pool.query('INSERT INTO trusted_admin_devices(admin_user_id,token_hash,label,expires_at) VALUES($1,$2,$3,$4)',[admin.id,hashToken(token),label,expires]);
+  res.setHeader('Set-Cookie',`${ADMIN_DEVICE_COOKIE}=${encodeURIComponent(token)}; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Strict; Path=/; Max-Age=${ADMIN_DEVICE_DAYS*86400}`);
+  json(res,200,{ok:true,expiresAt:expires,days:ADMIN_DEVICE_DAYS});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/device/revoke'){
+  const admin=await requireUser(req,res,'admin');if(!admin)return true;
+  const token=parseCookies(req)[ADMIN_DEVICE_COOKIE];if(token)await pool.query('DELETE FROM trusted_admin_devices WHERE admin_user_id=$1 AND token_hash=$2',[admin.id,hashToken(token)]);
+  res.setHeader('Set-Cookie',`${ADMIN_DEVICE_COOKIE}=; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Strict; Path=/; Max-Age=0`);
+  json(res,200,{ok:true});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/auth/logout'){
+  const cookies=parseCookies(req),space=new URL(req.url,'http://localhost').searchParams.get('space')||'user';
+  const admin=space==='admin',cookieName=admin?ADMIN_COOKIE:COOKIE,token=cookies[cookieName];
+  if(token)await pool.query('DELETE FROM sessions WHERE token_hash=$1',[hashToken(token)]);
+  const clear=`${cookieName}=; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Lax; Path=/; Max-Age=0`;
+  const headers=[clear];
+  if(admin){
+   // Une déconnexion explicite retire aussi l’autorisation persistante de cet appareil.
+   const trustedDevice=cookies[ADMIN_DEVICE_COOKIE];if(trustedDevice)await pool.query('DELETE FROM trusted_admin_devices WHERE token_hash=$1',[hashToken(trustedDevice)]);
+   headers.push(`${ADMIN_DEVICE_COOKIE}=; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Strict; Path=/; Max-Age=0`);
+   // Nettoyage d’une éventuelle ancienne session admin stockée dans le cookie historique.
+   const legacy=cookies[COOKIE];
+   if(legacy){const old=await pool.query(`SELECT u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1`,[hashToken(legacy)]);if(old.rows[0]?.role==='admin'){await pool.query('DELETE FROM sessions WHERE token_hash=$1',[hashToken(legacy)]);headers.push(`${COOKIE}=; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Lax; Path=/; Max-Age=0`)}}
+   const controlToken=cookies.smile_control;if(controlToken)await pool.query('DELETE FROM special_control_sessions WHERE token_hash=$1',[hashToken(controlToken)]);headers.push(`smile_control=; HttpOnly; ${process.env.NODE_ENV==='production'?'Secure; ':''}SameSite=Strict; Path=/; Max-Age=0`)
+  }
+  res.setHeader('Set-Cookie',headers);json(res,200,{ok:true});return true
+ }
+ if(req.method==='GET' && url.pathname==='/api/auth/me'){
+  const space=new URL(req.url,'http://localhost').searchParams.get('space')||'user';let u=await getUser(req,space);
+  if(!u&&space==='admin'&&pool){const device=parseCookies(req)[ADMIN_DEVICE_COOKIE];if(device){const q=await pool.query(`SELECT u.id,u.public_id,u.name,u.email,u.role FROM trusted_admin_devices d JOIN users u ON u.id=d.admin_user_id WHERE d.token_hash=$1 AND d.expires_at>now() AND u.role='admin' AND u.status='active'`,[hashToken(device)]);u=q.rows[0]||null;if(u){await pool.query('UPDATE trusted_admin_devices SET last_used_at=now() WHERE token_hash=$1',[hashToken(device)]);await createSession(u.id,'admin',res);}}}
+  json(res,200,{user:u||null});return true
+ }
+ if(req.method==='POST' && url.pathname==='/api/auth/change-password'){const u=await requireUser(req,res,'user');if(!u)return true;const b=await readBody(req),current=String(b.currentPassword||''),next=String(b.newPassword||''),confirm=String(b.confirmPassword||'');if(next.length<6||next.length>200||next!==confirm){json(res,400,{error:'Le nouveau mot de passe doit contenir au moins 6 caractères et les confirmations doivent correspondre.'});return true}const c=await pool.connect();try{await c.query('BEGIN');const row=await c.query('SELECT password_hash,password_salt FROM users WHERE id=$1 FOR UPDATE',[u.id]);const check=await passwordHash(current,row.rows[0].password_salt);if(!safeEqual(check.hash,row.rows[0].password_hash)){await c.query('ROLLBACK');json(res,400,{error:'Le mot de passe actuel est incorrect.'});return true}const hashed=await passwordHash(next);await c.query('UPDATE users SET password_hash=$2,password_salt=$3 WHERE id=$1',[u.id,hashed.hash,hashed.salt]);const token=parseCookies(req)[COOKIE];await c.query('DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2',[u.id,hashToken(token||'')]);await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[u.id,'user.password_changed','user',String(u.id)]);await c.query('COMMIT');json(res,200,{ok:true,message:'Mot de passe modifié. Les autres sessions ont été fermées.'});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+ if(req.method==='POST' && url.pathname==='/api/security/withdrawal-pin'){
+  if(!rateLimit(req,res))return true;const u=await requireUser(req,res,'user');if(!u)return true;const b=await readBody(req),pin=String(b.pin||''),current=String(b.currentPin||'');
+  if(!/^\d{6}$/.test(pin)){json(res,400,{error:'Le PIN doit contenir exactement 6 chiffres.'});return true}
+  const old=await pool.query('SELECT withdrawal_pin_hash,withdrawal_pin_salt FROM users WHERE id=$1',[u.id]);
+  if(old.rows[0].withdrawal_pin_hash){const check=await passwordHash(current,old.rows[0].withdrawal_pin_salt);if(!safeEqual(check.hash,old.rows[0].withdrawal_pin_hash)){json(res,400,{error:'PIN actuel incorrect.'});return true}}
+  const h=await passwordHash(pin);await pool.query('UPDATE users SET withdrawal_pin_hash=$2,withdrawal_pin_salt=$3 WHERE id=$1',[u.id,h.hash,h.salt]);await pool.query("INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,'user.withdrawal_pin_set','user',$2)",[u.id,String(u.id)]);json(res,200,{ok:true,message:'PIN de retrait enregistré.'});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/wallet/beneficiaries'){
+  const u=await requireUser(req,res,'user');if(!u)return true;const q=await pool.query('SELECT id,provider,label,phone,created_at FROM wallet_beneficiaries WHERE user_id=$1 ORDER BY id DESC',[u.id]);json(res,200,{beneficiaries:q.rows});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/wallet/beneficiaries'){
+  const u=await requireUser(req,res,'user');if(!u)return true;const b=await readBody(req),provider=String(b.provider||''),label=String(b.label||'').trim(),phone=String(b.phone||'').trim();
+  if(!['flooz','tmoney'].includes(provider)||label.length<2||label.length>60||!/^\+?[0-9\s-]{8,20}$/.test(phone)){json(res,400,{error:'Vérifiez le nom, l’opérateur et le numéro.'});return true}
+  const count=await pool.query('SELECT count(*)::int n FROM wallet_beneficiaries WHERE user_id=$1',[u.id]);if(count.rows[0].n>=5){json(res,409,{error:'Vous pouvez enregistrer au maximum 5 bénéficiaires.'});return true}
+  try{const q=await pool.query('INSERT INTO wallet_beneficiaries(user_id,provider,label,phone) VALUES($1,$2,$3,$4) RETURNING id,provider,label,phone',[u.id,provider,label,phone]);json(res,201,{beneficiary:q.rows[0]});return true}catch(e){if(e.code==='23505'){json(res,409,{error:'Ce bénéficiaire existe déjà.'});return true}throw e}
+ }
+ if(req.method==='DELETE' && /^\/api\/wallet\/beneficiaries\/\d+$/.test(url.pathname)){
+  const u=await requireUser(req,res,'user');if(!u)return true;const id=Number(url.pathname.split('/').pop()),q=await pool.query('DELETE FROM wallet_beneficiaries WHERE id=$1 AND user_id=$2 RETURNING id',[id,u.id]);if(!q.rowCount){json(res,404,{error:'Bénéficiaire introuvable.'});return true}json(res,200,{ok:true});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/publications'){
+  const u=await requireUser(req,res,'user');if(!u)return true;const q=await pool.query("SELECT id,title,body,published_at FROM publications WHERE status='published' ORDER BY published_at DESC,id DESC LIMIT 100");json(res,200,{publications:q.rows});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/publications'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const q=await pool.query('SELECT id,title,body,status,created_at,published_at FROM publications ORDER BY created_at DESC LIMIT 200');json(res,200,{publications:q.rows});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/publications'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req),title=String(b.title||'').trim(),body=String(b.body||'').trim();if(title.length<3||title.length>160||body.length<1||body.length>10000){json(res,400,{error:'Titre (3–160 caractères) et contenu (1–10 000 caractères) requis.'});return true}const q=await pool.query("INSERT INTO publications(title,body,created_by) VALUES($1,$2,$3) RETURNING id,title,status,created_at",[title,body,a.id]);await pool.query("INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,'publication.created','publication',$2)",[a.id,String(q.rows[0].id)]);json(res,201,{publication:q.rows[0]});return true;
+ }
+ if(req.method==='POST' && /^\/api\/admin\/publications\/\d+\/publish$/.test(url.pathname)){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const id=Number(url.pathname.split('/')[4]),b=await readBody(req),publish=b.published===true;const q=await pool.query("UPDATE publications SET status=$2,published_at=CASE WHEN $2='published' THEN now() ELSE NULL END,updated_at=now() WHERE id=$1 RETURNING id,status",[id,publish?'published':'draft']);if(!q.rowCount){json(res,404,{error:'Publication introuvable.'});return true}await pool.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,publish?'publication.published':'publication.unpublished','publication',String(id)]);json(res,200,{publication:q.rows[0]});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/support/messages'){
+  const u=await requireUser(req,res,'user');if(!u)return true;const b=await readBody(req),body=String(b.message||'').trim();if(body.length<1||body.length>3000){json(res,400,{error:'Le message doit contenir entre 1 et 3 000 caractères.'});return true}
+  const q=await pool.query("INSERT INTO support_messages(user_id,sender_role,body) VALUES($1,'user',$2) RETURNING id,body,created_at",[u.id,body]);json(res,201,{message:q.rows[0]});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/support/messages'){
+  const u=await requireUser(req,res,'user');if(!u)return true;await pool.query("UPDATE support_messages SET is_read=true WHERE user_id=$1 AND sender_role='admin'",[u.id]);const q=await pool.query('SELECT id,sender_role,body,parent_id,created_at FROM support_messages WHERE user_id=$1 ORDER BY created_at ASC LIMIT 200',[u.id]);json(res,200,{messages:q.rows});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/notifications'){const u=await requireUser(req,res,'user');if(!u)return true;await pool.query('UPDATE user_notifications SET is_read=true WHERE user_id=$1',[u.id]);const q=await pool.query('SELECT id,title,message,is_read,created_at FROM user_notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50',[u.id]);json(res,200,{notifications:q.rows});return true}
+ if(req.method==='GET' && url.pathname==='/api/team'){const u=await requireUser(req,res,'user');if(!u)return true;const q=await pool.query(`WITH RECURSIVE team(id,public_id,name,sponsor_id,level,created_at) AS (SELECT id,public_id,name,sponsor_id,1,created_at FROM users WHERE sponsor_id=$1 UNION ALL SELECT c.id,c.public_id,c.name,c.sponsor_id,t.level+1,c.created_at FROM users c JOIN team t ON c.sponsor_id=t.id WHERE t.level<3) SELECT id,public_id,name,level,created_at FROM team ORDER BY level,created_at DESC`,[u.id]);const counts=[1,2,3].map(level=>({level,members:q.rows.filter(x=>Number(x.level)===level).length}));const origin=`${req.headers['x-forwarded-proto']||'https'}://${req.headers.host}`;json(res,200,{referralCode:u.public_id,referralLink:`${origin}/?ref=${encodeURIComponent(u.public_id)}`,levels:counts,members:q.rows});return true}
+ if(req.method==='POST' && url.pathname==='/api/deposits'){
+  if(!MOBILE_MONEY_ENABLED){json(res,503,{error:'Les dépôts Mobile Money ne sont pas encore activés sur ORVIA 45.'});return true}
+  const u=await requireUser(req,res,'user');if(!u)return true;
+  const b=await readBody(req),amount=Math.floor(Number(b.amount)),provider=String(b.provider||''),phone=String(b.phone||'').trim(),reference=String(b.reference||'').trim();
+  if(!Number.isSafeInteger(amount)||amount<500||amount>100000000||!['flooz','tmoney'].includes(provider)||!/^\+?[0-9\s-]{8,20}$/.test(phone)||reference.length<3||reference.length>120){json(res,400,{error:'Vérifiez le montant, l’opérateur, le téléphone et la référence de paiement.'});return true}
+  try{const q=await pool.query("INSERT INTO deposits(user_id,amount_cfa,provider,provider_reference,payer_phone) VALUES($1,$2,$3,$4,$5) RETURNING id,amount_cfa,provider,status,created_at",[u.id,amount,provider,reference,phone]);json(res,201,{deposit:q.rows[0],message:'Demande enregistrée. Le portefeuille sera crédité uniquement après vérification et validation par ORVIA 45.'});return true}catch(e){if(e.code==='23505'){json(res,409,{error:'Cette référence de paiement a déjà été utilisée.'});return true}throw e}
+ }
+ if(req.method==='POST' && url.pathname==='/api/withdrawals'){
+  if(!MOBILE_MONEY_ENABLED){json(res,503,{error:'Les retraits Mobile Money ne sont pas encore activés sur ORVIA 45.'});return true}
+  const u=await requireUser(req,res,'user');if(!u)return true;
+  if(!rateLimit(req,res))return true;const b=await readBody(req);const walletCheck=await pool.query('SELECT 1 FROM wallet_beneficiaries WHERE user_id=$1 LIMIT 1',[u.id]);if(!walletCheck.rowCount){json(res,409,{code:'WALLET_REQUIRED',error:'Créez d’abord votre portefeuille en ajoutant un bénéficiaire dans Paramètres > Lier le portefeuille.'});return true;}const pin=String(b.pin||''),pinRow=await pool.query('SELECT withdrawal_pin_hash,withdrawal_pin_salt FROM users WHERE id=$1',[u.id]);if(!pinRow.rows[0].withdrawal_pin_hash){json(res,403,{error:'Configurez votre PIN de retrait dans Paramètres avant de demander un retrait.'});return true}const pinCheck=await passwordHash(pin,pinRow.rows[0].withdrawal_pin_salt);if(!safeEqual(pinCheck.hash,pinRow.rows[0].withdrawal_pin_hash)){json(res,403,{error:'PIN de retrait incorrect.'});return true}const amount=Math.floor(Number(b.amount));let provider=String(b.provider||''),destination=String(b.destination||'').trim();if(b.beneficiaryId){const beneficiaryId=Number(b.beneficiaryId);if(!Number.isSafeInteger(beneficiaryId)||beneficiaryId<1){json(res,400,{error:'Identifiant de bénéficiaire invalide.'});return true}const beneficiary=await pool.query('SELECT provider,phone FROM wallet_beneficiaries WHERE id=$1 AND user_id=$2',[beneficiaryId,u.id]);if(!beneficiary.rowCount){json(res,400,{error:'Bénéficiaire introuvable dans votre compte.'});return true}provider=beneficiary.rows[0].provider;destination=beneficiary.rows[0].phone}
+  if(!Number.isSafeInteger(amount)||amount<500||amount>100000000||!['flooz','tmoney'].includes(provider)||!/^[+0-9][0-9\s-]{7,19}$/.test(destination)){json(res,400,{error:'Vérifiez le montant, l’opérateur et le numéro de réception.'});return true}
+  const fee=Math.round(amount*0.10),net=amount-fee,c=await pool.connect();
+  try{await c.query('BEGIN');await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[u.id]);const eligible=await c.query("SELECT 1 FROM investments WHERE user_id=$1 AND status IN ('approved','released') LIMIT 1",[u.id]);if(!eligible.rowCount){await c.query('ROLLBACK');json(res,403,{error:'Un premier investissement validé est nécessaire avant tout retrait.'});return true}
+   const bal=await walletBalance(c,u.id);if(amount>bal){await c.query('ROLLBACK');json(res,409,{error:'Solde disponible insuffisant.'});return true}
+   const q=await c.query("INSERT INTO withdrawals(user_id,amount_cfa,fee_cfa,net_amount_cfa,provider,destination) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,amount_cfa,fee_cfa,net_amount_cfa,provider,status,created_at",[u.id,amount,fee,net,provider,destination]);const w=q.rows[0];await postJournal(c,{eventKey:`withdrawal:${w.id}:requested`,eventType:'withdrawal_requested',userId:u.id,amount,description:'Débit immédiat du portefeuille à la demande de retrait',lines:[{account:'user_wallet_liability',debit:amount},{account:'withdrawal_payable',credit:amount}]});await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[u.id,'withdrawal.requested','withdrawal',String(w.id)]);await c.query('COMMIT');json(res,201,{withdrawal:w});return true;
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ if(req.method==='GET' && url.pathname==='/api/public/withdrawal-records'){
+  // Seuls les retraits réellement payés sont publiés; aucun faux historique n'est généré.
+  const q=await pool.query(`SELECT w.id,w.amount_cfa,w.destination,w.paid_at FROM withdrawals w WHERE w.status='paid' AND w.paid_at IS NOT NULL ORDER BY w.paid_at DESC,w.id DESC LIMIT 40`);
+  const allowed=new Set(['70','71','90','92','96','72','91']);
+  const records=q.rows.map(w=>{
+   let digits=String(w.destination||'').replace(/\D/g,'');
+   if(digits.startsWith('228') && digits.length===11) digits=digits.slice(3);
+   if(digits.length!==8 || !allowed.has(digits.slice(0,2))) return null;
+   return {id:w.id,phone:`+228 ${digits.slice(0,2)} XX XX ${digits.slice(-2)}`,amount:Number(w.amount_cfa)};
+  }).filter(Boolean);
+  json(res,200,{records});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/withdrawals'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const q=await pool.query(`SELECT w.*,u.public_id,u.name,u.email FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE w.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,w.created_at DESC LIMIT 200`);json(res,200,{withdrawals:q.rows});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/withdrawals/approve'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req),id=Number(b.withdrawalId);
+  if(!Number.isSafeInteger(id)||id<1){json(res,400,{error:'Identifiant de retrait invalide.'});return true}
+  const c=await pool.connect();try{await c.query('BEGIN');const q=await c.query("SELECT * FROM withdrawals WHERE id=$1 AND status='pending' FOR UPDATE",[id]);
+   if(!q.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Demande de retrait en attente introuvable.'});return true}
+   const w=q.rows[0];await c.query("UPDATE withdrawals SET status='approved',approved_by=$2,approved_at=now() WHERE id=$1",[id,a.id]);
+   await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'withdrawal.approved','withdrawal',String(id)]);
+   await c.query("INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING",[w.user_id,`withdrawal:${id}:approved`,'Retrait approuvé',`Votre demande de retrait de ${Number(w.amount_cfa).toLocaleString('fr-FR')} FCFA est approuvée. Le transfert reste à effectuer et à confirmer.`]);
+   await c.query('COMMIT');json(res,200,{ok:true});return true;
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/withdrawals/reject'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req),id=Number(b.withdrawalId),reason=String(b.reason||'').trim();if(!Number.isInteger(id)||id<1||reason.length<3||reason.length>300){json(res,400,{error:'Identifiant ou motif invalide.'});return true}
+  const c=await pool.connect();try{await c.query('BEGIN');const q=await c.query("SELECT * FROM withdrawals WHERE id=$1 AND status IN ('pending','approved') FOR UPDATE",[id]);if(!q.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Demande en attente ou approuvée introuvable.'});return true}const w=q.rows[0];await c.query("UPDATE withdrawals SET status='rejected',approved_by=$2,approved_at=now() WHERE id=$1",[id,a.id]);await postJournal(c,{eventKey:`withdrawal:${id}:rejected`,eventType:'withdrawal_rejected',userId:w.user_id,amount:Number(w.amount_cfa),description:'Remboursement automatique après rejet du retrait',lines:[{account:'withdrawal_payable',debit:Number(w.amount_cfa)},{account:'user_wallet_liability',credit:Number(w.amount_cfa)}]});await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'withdrawal.rejected: '+reason,'withdrawal',String(id)]);await c.query(`INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING`,[w.user_id,`withdrawal:${id}:rejected`,'Retrait rejeté',`Votre demande de retrait de ${Number(w.amount_cfa).toLocaleString('fr-FR')} FCFA a été rejetée. Le montant a été recrédité à votre portefeuille. Motif : ${reason}`]);await c.query('COMMIT');json(res,200,{ok:true});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/withdrawals/paid'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req),id=Number(b.withdrawalId),reference=String(b.reference||'').trim();if(!Number.isInteger(id)||id<1||reference.length<3||reference.length>120){json(res,400,{error:'Identifiant ou référence de paiement invalide.'});return true}
+  const c=await pool.connect();try{await c.query('BEGIN');const q=await c.query("SELECT * FROM withdrawals WHERE id=$1 AND status='approved' FOR UPDATE",[id]);if(!q.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Demande approuvée à payer introuvable.'});return true}const w=q.rows[0];await c.query("UPDATE withdrawals SET status='paid',paid_by=$2,paid_at=now(),provider_reference=$3 WHERE id=$1",[id,a.id,reference]);await postJournal(c,{eventKey:`withdrawal:${id}:paid`,eventType:'withdrawal_paid',userId:w.user_id,amount:Number(w.amount_cfa),description:'Règlement du retrait déjà débité via '+w.provider,lines:[{account:'withdrawal_payable',debit:Number(w.amount_cfa)},{account:'cash_held',credit:Number(w.net_amount_cfa)},{account:'withdrawal_fee_revenue',credit:Number(w.fee_cfa)}]});await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'withdrawal.paid','withdrawal',String(id)]);await c.query(`INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING`,[w.user_id,`withdrawal:${id}:paid`,'Retrait payé',`Votre retrait est payé. Montant net envoyé : ${Number(w.net_amount_cfa).toLocaleString('fr-FR')} FCFA.`]);await c.query('COMMIT');json(res,200,{ok:true});return true;
+  }catch(e){await c.query('ROLLBACK');if(e.code==='23505'){json(res,409,{error:'Cette référence de paiement est déjà utilisée.'});return true}throw e}finally{c.release()}
+ }
+ if(req.method==='GET' && url.pathname==='/api/financial-history'){
+  const u=await requireUser(req,res,'user');if(!u)return true;
+  const q=await pool.query(`
+   SELECT * FROM (
+    SELECT 'deposit'::text type,id,amount_cfa,provider::text method,provider_reference::text reference,status::text,0::bigint fee_cfa,amount_cfa::bigint net_amount_cfa,created_at,NULL::text offer_name,NULL::text duration_label,NULL::bigint offer_min_amount,NULL::bigint offer_display_value,NULL::jsonb offer_conditions FROM deposits WHERE user_id=$1
+    UNION ALL
+    SELECT 'withdrawal',id,amount_cfa,provider::text,provider_reference::text,status::text,fee_cfa,net_amount_cfa,created_at,NULL::text,NULL::text,NULL::bigint,NULL::bigint,NULL::jsonb FROM withdrawals WHERE user_id=$1
+    UNION ALL
+    SELECT 'investment',id,amount_cfa,COALESCE(offer_code_snapshot,'SMILE')::text,NULL::text,status::text,0::bigint,amount_cfa::bigint,created_at,offer_name_snapshot,duration_label_snapshot,min_amount_cfa_snapshot,display_value_cfa_snapshot,offer_conditions_snapshot FROM investments WHERE user_id=$1
+    UNION ALL
+    SELECT 'commission',id,amount_cfa,'Parrainage'::text,NULL::text,'credited'::text,0::bigint,amount_cfa::bigint,created_at,NULL::text,NULL::text,NULL::bigint,NULL::bigint,NULL::jsonb FROM referral_commissions WHERE beneficiary_id=$1 AND NOT EXISTS(SELECT 1 FROM special_commission_accounts sc WHERE sc.user_id=$1)
+   ) history ORDER BY created_at DESC,id DESC LIMIT 100`,[u.id]);
+  json(res,200,{transactions:q.rows});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/my-products'){
+  const u=await requireUser(req,res,'user');if(!u)return true;
+  const q=await pool.query(`SELECT id,offer_id,offer_name_snapshot AS name,offer_code_snapshot AS code,amount_cfa,total_return_cfa,due_at,status,approved_at,created_at,duration_label_snapshot AS duration_label,display_value_cfa_snapshot AS display_value_cfa FROM investments WHERE user_id=$1 AND status IN ('approved','released') ORDER BY created_at DESC,id DESC LIMIT 100`,[u.id]);
+  json(res,200,{products:q.rows});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/deposits'){
+  const u=await requireUser(req,res,'user');if(!u)return true;const q=await pool.query('SELECT id,amount_cfa,provider,provider_reference,status,created_at,approved_at FROM deposits WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50',[u.id]);json(res,200,{deposits:q.rows});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/wallet/balance'){const u=await requireUser(req,res,'user');if(!u)return true;const c=await pool.connect();try{const balance=await walletBalance(c,u.id);const reserved=await c.query("SELECT COALESCE(sum(amount_cfa),0)::bigint n FROM withdrawals WHERE user_id=$1 AND status IN ('pending','approved')",[u.id]);json(res,200,{balance_cfa:balance,reserved_cfa:Number(reserved.rows[0].n),available_cfa:Math.max(0,balance)});return true}finally{c.release()}}
+ if(req.method==='GET' && url.pathname==='/api/offers'){
+  const u=await requireUser(req,res,'user');if(!u)return true;
+  await pool.query(`INSERT INTO user_offer_quotas(user_id,offer_id,total_limit,remaining)
+    SELECT $1,o.id,o.default_user_limit,GREATEST(0,o.default_user_limit-COALESCE((
+      SELECT count(*)::int FROM investments i WHERE i.user_id=$1 AND i.offer_id=o.id AND i.status IN ('approved','released')
+    ),0))
+    FROM investment_offers o WHERE o.active=true AND o.published=true
+    ON CONFLICT(user_id,offer_id) DO NOTHING`,[u.id]);
+  const q=await pool.query(`SELECT o.id,o.code,o.name,regexp_replace(COALESCE(o.description,''),'\\s*[—–-]?\\s*illustration dorée personnalisable depuis l’administration\\.?','', 'gi') AS description,o.category,o.duration_label,o.min_amount_cfa,o.max_amount_cfa,o.display_value_cfa,
+    COALESCE(q.total_limit,o.default_user_limit) AS total_limit,COALESCE(q.remaining,o.default_user_limit) AS remaining,o.image_url,o.stock_limit,o.published,o.purchase_enabled,o.sale_start_at,o.sale_end_at,o.reservation_amounts_cfa,o.product_wallet_balance_cfa,o.reservations_remaining,CASE WHEN o.category='limited' AND o.sale_start_at>now() THEN 'scheduled' WHEN o.category='limited' AND o.sale_end_at<=now() THEN 'expired' WHEN o.category='limited' THEN 'live' ELSE NULL END AS limited_status,
+    (SELECT count(*)::int FROM investments i WHERE i.offer_id=o.id AND i.status IN ('approved','released')) AS stock_used FROM investment_offers o LEFT JOIN user_offer_quotas q ON q.offer_id=o.id AND q.user_id=$1
+    WHERE o.active=true AND o.removed=false AND (o.category<>'limited' OR o.published=true) AND (o.category<>'limited' OR o.limited_deleted_at IS NULL) AND (o.category<>'limited' OR o.sale_end_at IS NULL OR o.sale_end_at>now()) ORDER BY o.id`,[u.id]);const offers=q.rows;json(res,200,{offers});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/investments'){
+  const u=await requireUser(req,res,'user');if(!u)return true;
+  const b=await readBody(req),offerId=Number(b.offerId),amount=Math.floor(Number(b.amount)),idempotencyKey=String(b.idempotencyKey||'');
+  if(!Number.isSafeInteger(offerId)||offerId<1||!Number.isSafeInteger(amount)||amount<=0){json(res,400,{error:'Offre ou montant invalide.'});return true}
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)){json(res,400,{error:'Clé de confirmation invalide. Veuillez rouvrir la confirmation.'});return true}
+  const requestKey=`purchase:${u.id}:${idempotencyKey}`;
+  const c=await pool.connect();try{await c.query('BEGIN');
+   await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[u.id]);
+   // Une même confirmation ne peut débiter le portefeuille qu'une seule fois, même après un retry réseau.
+   const replay=await c.query(`SELECT i.id,i.offer_id,i.amount_cfa,i.total_return_cfa,i.due_at,i.status,i.approved_at,i.offer_conditions_snapshot,i.offer_name_snapshot FROM investments i WHERE i.user_id=$1 AND i.execution_key=$2`,[u.id,requestKey]);
+   if(replay.rowCount){if(Number(replay.rows[0].offer_id)!==offerId||Number(replay.rows[0].amount_cfa)!==amount){await c.query('ROLLBACK');json(res,409,{error:'Cette clé de confirmation est déjà associée à un autre achat.'});return true}const quotaReplay=await c.query('SELECT remaining FROM user_offer_quotas WHERE user_id=$1 AND offer_id=$2',[u.id,offerId]);await c.query('COMMIT');json(res,200,{investment:replay.rows[0],remaining:quotaReplay.rows[0]?.remaining??0,offer:replay.rows[0].offer_name_snapshot,idempotentReplay:true});return true}
+   const offer=await c.query('SELECT * FROM investment_offers WHERE id=$1 AND active=true AND published=true AND removed=false FOR UPDATE',[offerId]);
+   if(!offer.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Offre indisponible.'});return true}
+   if(!offer.rows[0].purchase_enabled){await c.query('ROLLBACK');json(res,409,{error:'Bientôt disponible'});return true}
+   if(offer.rows[0].category==='limited'&&offer.rows[0].sale_end_at&&new Date(offer.rows[0].sale_end_at)<=new Date()){await c.query('ROLLBACK');json(res,409,{error:'Cette offre à temps limité est terminée.'});return true}
+   let stockUsedBefore=0;if(offer.rows[0].stock_limit!==null){const used=await c.query("SELECT count(*)::int n FROM investments WHERE offer_id=$1 AND status IN ('approved','released')",[offerId]);stockUsedBefore=Number(used.rows[0].n);if(stockUsedBefore>=Number(offer.rows[0].stock_limit)){await c.query('ROLLBACK');json(res,409,{error:'Le stock de cette offre est épuisé.'});return true}}
+   const isLimited=offer.rows[0].category==='limited';const reservationAmounts=Array.isArray(offer.rows[0].reservation_amounts_cfa)?offer.rows[0].reservation_amounts_cfa.map(Number):[];if(isLimited){if(!reservationAmounts.length||!reservationAmounts.includes(amount)){await c.query('ROLLBACK');json(res,400,{error:'Choisissez un montant de réservation proposé pour ce produit.'});return true}if(Number(offer.rows[0].reservations_remaining)<=0){await c.query('ROLLBACK');json(res,409,{error:'Toutes les réservations de ce produit ont été prises.'});return true}}else if(amount!==Number(offer.rows[0].min_amount_cfa)){await c.query('ROLLBACK');json(res,400,{error:`Le montant de cette offre est fixé à ${offer.rows[0].min_amount_cfa} FCFA.`});return true}
+   const quota=await c.query('SELECT * FROM user_offer_quotas WHERE user_id=$1 AND offer_id=$2 FOR UPDATE',[u.id,offerId]);
+   if(!quota.rowCount||quota.rows[0].remaining<=0){await c.query('ROLLBACK');json(res,409,{error:'Vous avez atteint votre limite pour cette offre.'});return true}
+   const bal=await walletBalance(c,u.id);if(amount>bal){await c.query('ROLLBACK');json(res,409,{error:`Solde disponible insuffisant. Disponible : ${bal} FCFA.`});return true}
+   const upd=await c.query('UPDATE user_offer_quotas SET remaining=remaining-1 WHERE id=$1 AND remaining>0 RETURNING remaining',[quota.rows[0].id]);
+   if(!upd.rowCount){await c.query('ROLLBACK');json(res,409,{error:'Aucune souscription restante pour cette offre.'});return true}
+   const paidAt=new Date(),startAt=isLimited&&offer.rows[0].sale_start_at&&new Date(offer.rows[0].sale_start_at)>paidAt?new Date(offer.rows[0].sale_start_at):paidAt,dueAt=calculateDueAt(offer.rows[0].duration_label,startAt),totalReturn=isLimited?Math.round(Number(offer.rows[0].display_value_cfa)*amount/Number(offer.rows[0].min_amount_cfa)):Number(offer.rows[0].display_value_cfa),conditionsSnapshot={offerId:Number(offer.rows[0].id),code:offer.rows[0].code,name:offer.rows[0].name,description:offer.rows[0].description,durationLabel:offer.rows[0].duration_label,minAmountCfa:amount,displayValueCfa:totalReturn,stockLimit:offer.rows[0].stock_limit,defaultUserLimit:Number(offer.rows[0].default_user_limit),stockUsedBeforePurchase:stockUsedBefore,stockRemainingBeforePurchase:offer.rows[0].stock_limit===null?null:Math.max(0,Number(offer.rows[0].stock_limit)-stockUsedBefore),userPurchaseLimit:Number(quota.rows[0].total_limit),userPurchasesRemainingBefore:Number(quota.rows[0].remaining),purchaseType:isLimited?'limited_reservation_paid':'standard_purchase',reservationPaidInFull:isLimited,reservationAmountCfa:isLimited?amount:null,cancelable:false,refundable:false,paidAt:paidAt.toISOString(),purchasedAt:paidAt.toISOString(),activationAt:startAt.toISOString()};const inv=await c.query(`INSERT INTO investments(user_id,offer_id,amount_cfa,total_return_cfa,due_at,status,approved_at,execution_key,offer_conditions_snapshot,offer_name_snapshot,offer_code_snapshot,duration_label_snapshot,min_amount_cfa_snapshot,display_value_cfa_snapshot,offer_description_snapshot) VALUES($1,$2,$3,$4,$5,'approved',now(),$6,$7::jsonb,$8,$9,$10,$11,$12,$13) RETURNING id,amount_cfa,total_return_cfa,due_at,status,approved_at,offer_conditions_snapshot`,[u.id,offerId,amount,totalReturn,dueAt,requestKey,JSON.stringify(conditionsSnapshot),conditionsSnapshot.name,conditionsSnapshot.code,conditionsSnapshot.durationLabel,amount,conditionsSnapshot.displayValueCfa,conditionsSnapshot.description]);
+   await postJournal(c,{eventKey:`investment:${inv.rows[0].id}:executed`,eventType:isLimited?'limited_reservation_paid':'investment_executed',userId:u.id,amount,description:isLimited?`Réservation payée intégralement — ${offer.rows[0].name}`:`Investissement automatique dans ${offer.rows[0].name}`,lines:[{account:'user_wallet_liability',debit:amount},{account:'investment_liability',credit:amount}]});
+   if(isLimited){const updatedOffer=await c.query('UPDATE investment_offers SET reservations_remaining=reservations_remaining-1,product_wallet_balance_cfa=product_wallet_balance_cfa+$2,updated_at=now() WHERE id=$1 AND reservations_remaining>0 RETURNING reservations_remaining',[offerId,amount]);if(!updatedOffer.rowCount){await c.query('ROLLBACK');json(res,409,{error:'Cette réservation vient d’être prise. Actualisez le produit.'});return true}}
+   await c.query(`INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,'investment',$3)`,[u.id,isLimited?'user.limited_reservation_paid':'user.product_purchased',String(inv.rows[0].id)]);
+   await c.query('COMMIT');json(res,201,{investment:inv.rows[0],remaining:upd.rows[0].remaining,offer:offer.rows[0].name});return true;
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/search'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;
+  const term=String(url.searchParams.get('q')||'').trim().slice(0,120);
+  if(term.length<2){json(res,400,{error:'Entrez au moins 2 caractères.'});return true}
+  const pattern='%'+term.replace(/[\\%_]/g,'\\$&')+'%';
+  const tables=await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name`);
+  const results=[];const excluded=/password|passwd|secret|token|salt|hash|credential|private|api_key|authorization/i;
+  for(const item of tables.rows){
+   if(results.length>=100)break;
+   const table=item.table_name;
+   const cols=await pool.query(`SELECT column_name,data_type FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`,[table]);
+   const searchable=cols.rows.filter(c=>!excluded.test(c.column_name)&&!['bytea'].includes(c.data_type));
+   if(!searchable.length)continue;
+   const qid=x=>'"'+String(x).replace(/"/g,'""')+'"';
+   const predicates=searchable.map(c=>`COALESCE(${qid(c.column_name)}::text,'') ILIKE $1 ESCAPE '\\\\'`).join(' OR ');
+   const pkq=await pool.query(`SELECT kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema WHERE tc.table_schema='public' AND tc.table_name=$1 AND tc.constraint_type='PRIMARY KEY' ORDER BY kcu.ordinal_position`,[table]);
+   const pk=pkq.rows.map(r=>r.column_name);
+   const selected=searchable.map(c=>c.column_name);
+   const selectCols=[...new Set([...pk,...selected])].map(qid).join(',');
+   const sql=`SELECT ${selectCols} FROM ${qid(table)} WHERE ${predicates} LIMIT $2`;
+   const q=await pool.query(sql,[pattern,Math.min(12,100-results.length)]);
+   for(const row of q.rows){
+    const safe={};for(const k of selected){if(row[k]!==undefined&&row[k]!==null)safe[k]=String(row[k]).slice(0,300)}
+    const key=pk.map(k=>row[k]).filter(v=>v!==undefined).join(':')||'';
+    const display=Object.entries(safe).filter(([k,v])=>String(v).toLocaleLowerCase('fr').includes(term.toLocaleLowerCase('fr'))).slice(0,5);
+    results.push({table,primary_key:key,fields:safe,matches:display});
+    if(results.length>=100)break;
+   }
+  }
+  json(res,200,{query:term,total:results.length,results});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/users'){const a=await requireUser(req,res,'admin');if(!a)return true;const term=String(url.searchParams.get('q')||'').trim().slice(0,100);const q=await pool.query(`SELECT u.id,u.public_id,u.name,u.email,u.status,u.created_at,(SELECT count(*)::int FROM deposits d WHERE d.user_id=u.id) deposits_count,(SELECT count(*)::int FROM investments i WHERE i.user_id=u.id) investments_count,(SELECT count(*)::int FROM withdrawals w WHERE w.user_id=u.id) withdrawals_count FROM users u WHERE u.role='user' AND ($1='' OR u.public_id ILIKE '%'||$1||'%' OR u.name ILIKE '%'||$1||'%' OR u.email ILIKE '%'||$1||'%') ORDER BY u.created_at DESC LIMIT 500`,[term]);json(res,200,{users:q.rows});return true}
+ const userAdminMatch=url.pathname.match(/^\/api\/admin\/users\/([A-Za-z0-9-]+)\/(suspend|reactivate|reset-password)$/);
+ if(userAdminMatch && req.method==='POST'){const a=await requireUser(req,res,'admin');if(!a)return true;const publicId=userAdminMatch[1],action=userAdminMatch[2],c=await pool.connect();try{await c.query('BEGIN');const u=await c.query("SELECT id,public_id,status FROM users WHERE public_id=$1 AND role='user' FOR UPDATE",[publicId]);if(!u.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Utilisateur introuvable.'});return true}const target=u.rows[0];if(action==='suspend'||action==='reactivate'){const status=action==='suspend'?'suspended':'active';await c.query('UPDATE users SET status=$2 WHERE id=$1',[target.id,status]);if(status==='suspended')await c.query('DELETE FROM sessions WHERE user_id=$1',[target.id]);await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'user.'+action,'user',String(target.id)]);await c.query('INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING',[target.id,`account:${target.id}:${action}:${Date.now()}`,status==='suspended'?'Compte suspendu':'Compte réactivé',status==='suspended'?'Votre compte ORVIA 45 a été suspendu. Contactez le service client pour plus d’informations.':'Votre compte ORVIA 45 est de nouveau actif.']);await c.query('COMMIT');json(res,200,{ok:true,status});return true}const token=crypto.randomBytes(32).toString('base64url'),tokenHash=hashToken(token);await c.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '30 minutes')",[target.id,tokenHash]);await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'user.password_reset_requested','user',String(target.id)]);await c.query('COMMIT');json(res,200,{ok:true,token,expiresInMinutes:30});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+ if(req.method==='POST' && url.pathname==='/api/auth/password-reset'){const b=await readBody(req),token=String(b.token||''),password=String(b.password||'');if(token.length<20||password.length<10||password.length>200){json(res,400,{error:'Lien invalide ou mot de passe trop court (10 caractères minimum).'});return true}const p=await passwordHash(password),c=await pool.connect();try{await c.query('BEGIN');const t=await c.query('SELECT id,user_id FROM password_reset_tokens WHERE token_hash=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE',[hashToken(token)]);if(!t.rowCount){await c.query('ROLLBACK');json(res,400,{error:'Lien expiré ou déjà utilisé.'});return true}await c.query('UPDATE users SET password_hash=$2,password_salt=$3 WHERE id=$1',[t.rows[0].user_id,p.hash,p.salt]);await c.query('UPDATE password_reset_tokens SET used_at=now() WHERE id=$1',[t.rows[0].id]);await c.query('DELETE FROM sessions WHERE user_id=$1',[t.rows[0].user_id]);await c.query('COMMIT');json(res,200,{ok:true});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+
+ if(req.method==='POST' && url.pathname==='/api/admin/offers/image'){const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req,8*1024*1024),data=String(b.dataUrl||'');const m=data.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);if(!m){json(res,400,{error:'Image invalide. Utilisez PNG, JPEG ou WebP.'});return true}const bytes=Buffer.from(m[2],'base64');if(!bytes.length||bytes.length>5*1024*1024){json(res,400,{error:'L’image doit peser 5 Mo maximum.'});return true}const sig=bytes.subarray(0,12);const valid=m[1]==='png'?sig.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):m[1]==='jpeg'?sig[0]===255&&sig[1]===216&&sig[2]===255:sig.toString('ascii',0,4)==='RIFF'&&sig.toString('ascii',8,12)==='WEBP';if(!valid){json(res,400,{error:'Le contenu du fichier ne correspond pas à son format.'});return true}const dir=path.join(ROOT,'uploads','offers');fs.mkdirSync(dir,{recursive:true});const ext=m[1]==='jpeg'?'jpg':m[1],name=crypto.randomUUID()+'.'+ext;fs.writeFileSync(path.join(dir,name),bytes,{flag:'wx'});json(res,201,{imageUrl:'/uploads/offers/'+name});return true}
+ if(req.method==='GET' && url.pathname==='/api/admin/offer-conditions-audit'){const a=await requireUser(req,res,'admin');if(!a)return true;const offerId=Number(url.searchParams.get('offerId')||0);const q=await pool.query(`SELECT h.id,h.offer_id,o.code,o.name offer_name,h.old_conditions,h.new_conditions,h.reason,h.created_at,u.name actor_name FROM offer_conditions_audit h JOIN investment_offers o ON o.id=h.offer_id LEFT JOIN users u ON u.id=h.actor_id WHERE ($1=0 OR h.offer_id=$1) ORDER BY h.created_at DESC LIMIT 300`,[offerId]);json(res,200,{history:q.rows});return true}
+ if(url.pathname==='/api/admin/offers' && req.method==='GET'){const a=await requireUser(req,res,'admin');if(!a)return true;const q=await pool.query(`SELECT o.id,o.code,o.name,regexp_replace(COALESCE(o.description,''),'\\s*[—–-]?\\s*illustration dorée personnalisable depuis l’administration\\.?','', 'gi') AS description,o.category,o.duration_label,o.min_amount_cfa,o.max_amount_cfa,o.display_value_cfa,o.default_user_limit,o.active,o.published,o.purchase_enabled,o.removed,o.image_url,o.stock_limit,o.sale_start_at,o.sale_end_at,o.reservation_amounts_cfa,o.product_wallet_balance_cfa,o.reservations_remaining,o.limited_deleted_at,(SELECT count(*)::int FROM investments i WHERE i.offer_id=o.id AND i.status IN ('approved','released')) AS stock_used,(SELECT count(*)::int FROM investments i WHERE i.offer_id=o.id AND i.offer_conditions_snapshot->>'purchaseType'='limited_reservation_paid' AND i.status IN ('approved','released')) AS paid_reservations FROM investment_offers o ORDER BY o.id DESC`);json(res,200,{offers:q.rows});return true}
+ if(url.pathname==='/api/admin/offers' && req.method==='POST'){const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req);const code=String(b.code||'').trim().toUpperCase(),name=String(b.name||'').trim(),description=String(b.description||'').trim(),category=String(b.category||'ia'),duration=String(b.durationLabel||'').trim(),min=Number(b.minAmount),max=null,value=Number(b.displayValue),limit=Number(b.defaultUserLimit),stock=b.stockLimit===''||b.stockLimit==null?null:Number(b.stockLimit),imageUrl=String(b.imageUrl||'').trim(),saleStart=b.saleStartAt?new Date(b.saleStartAt):null,saleEnd=b.saleEndAt?new Date(b.saleEndAt):null,reservationAmounts=Array.isArray(b.reservationAmounts)?b.reservationAmounts.map(Number):[],walletBalance=Number(b.productWalletBalance||0),reservationsRemaining=Number(b.reservationsRemaining||0);
+  if(!['ia','super','limited','daily','team'].includes(category)||!/^[A-Z0-9-]{2,32}$/.test(code)||!name||name.length>80||!duration||duration.length>80||!Number.isSafeInteger(min)||min<1||!Number.isSafeInteger(value)||value<1||!Number.isSafeInteger(limit)||limit<0||limit>100000||!(stock===null||(Number.isSafeInteger(stock)&&stock>=0))|| (imageUrl&&!/^\/uploads\/offers\/[a-f0-9-]+\.(png|jpg|webp)$/.test(imageUrl))||(category==='limited'&&((saleStart&&!Number.isFinite(saleStart.getTime()))||(saleEnd&&!Number.isFinite(saleEnd.getTime()))||(saleStart&&saleEnd&&saleEnd<=saleStart)||!Number.isSafeInteger(walletBalance)||walletBalance<0||!Number.isSafeInteger(reservationsRemaining)||reservationsRemaining<0||reservationAmounts.some(x=>!Number.isSafeInteger(x)||x<1)))){json(res,400,{error:'Vérifiez les dates, montants de réservation et paramètres du produit.'});return true}
+  try{const q=await pool.query('INSERT INTO investment_offers(code,name,description,category,duration_label,min_amount_cfa,max_amount_cfa,display_value_cfa,default_user_limit,stock_limit,image_url,published,sale_start_at,sale_end_at,reservation_amounts_cfa,product_wallet_balance_cfa,reservations_remaining) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,false,$12,$13,$14::jsonb,$15,$16) RETURNING *',[code,name,description,category,duration,min,max,value,limit,stock,imageUrl||null,saleStart,saleEnd,JSON.stringify(reservationAmounts),walletBalance,reservationsRemaining]);json(res,201,{offer:q.rows[0]});}catch(e){if(e.code==='23505'){json(res,409,{error:'Ce code d’offre existe déjà.'});return true}throw e}return true}
+ const publicationMatch=url.pathname.match(/^\/api\/admin\/offers\/(\d+)\/publication$/);
+ if(publicationMatch && req.method==='POST'){const a=await requireUser(req,res,'admin');if(!a)return true;const id=Number(publicationMatch[1]),b=await readBody(req),action=String(b.action||'');if(!['hide','show','remove','republish'].includes(action)){json(res,400,{error:'Action de gestion invalide.'});return true}const q=await pool.query('SELECT active,removed,category,sale_start_at,sale_end_at FROM investment_offers WHERE id=$1',[id]);if(!q.rowCount){json(res,404,{error:'Offre introuvable.'});return true}if(['show','republish'].includes(action)&&!q.rows[0].active){json(res,409,{error:'Activez d’abord cette offre dans le formulaire.'});return true}if(['show','republish'].includes(action)&&q.rows[0].category==='limited'&&(!q.rows[0].sale_start_at||!q.rows[0].sale_end_at||new Date(q.rows[0].sale_end_at)<=new Date(q.rows[0].sale_start_at))){json(res,409,{error:'Programmez une date de mise en ligne et une date de fin valides avant de lancer ce produit.'});return true}const states={hide:{published:true,purchase_enabled:false,removed:false},show:{published:true,purchase_enabled:true,removed:false},remove:{published:false,purchase_enabled:false,removed:true},republish:{published:true,purchase_enabled:true,removed:false}}[action];await pool.query('UPDATE investment_offers SET published=$2,purchase_enabled=$3,removed=$4,updated_at=now() WHERE id=$1',[id,states.published,states.purchase_enabled,states.removed]);await pool.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,`offer.${action}`,'investment_offer',String(id)]);json(res,200,{ok:true,action,...states});return true}
+ const offerMatch=url.pathname.match(/^\/api\/admin\/offers\/(\d+)$/);
+ if(offerMatch && req.method==='PUT'){const a=await requireUser(req,res,'admin');if(!a)return true;const id=Number(offerMatch[1]),b=await readBody(req),name=String(b.name||'').trim(),description=String(b.description||'').trim(),category=String(b.category||'ia'),duration=String(b.durationLabel||'').trim(),min=Number(b.minAmount),max=null,value=Number(b.displayValue),limit=Number(b.defaultUserLimit),active=Boolean(b.active),stock=b.stockLimit===''||b.stockLimit==null?null:Number(b.stockLimit),imageUrl=String(b.imageUrl||'').trim(),saleStart=b.saleStartAt?new Date(b.saleStartAt):null,saleEnd=b.saleEndAt?new Date(b.saleEndAt):null,reservationAmounts=Array.isArray(b.reservationAmounts)?b.reservationAmounts.map(Number):[],walletBalance=Number(b.productWalletBalance||0),reservationsRemaining=Number(b.reservationsRemaining||0);
+  if(!['ia','super','limited','daily','team'].includes(category)||!name||name.length>80||!duration||duration.length>80||!Number.isSafeInteger(min)||min<1||!Number.isSafeInteger(value)||value<1||!Number.isSafeInteger(limit)||limit<0||limit>100000||!(stock===null||(Number.isSafeInteger(stock)&&stock>=0))||(imageUrl&&!/^\/uploads\/offers\/[a-f0-9-]+\.(png|jpg|webp)$/.test(imageUrl))||(category==='limited'&&((saleStart&&!Number.isFinite(saleStart.getTime()))||(saleEnd&&!Number.isFinite(saleEnd.getTime()))||(saleStart&&saleEnd&&saleEnd<=saleStart)||!Number.isSafeInteger(walletBalance)||walletBalance<0||!Number.isSafeInteger(reservationsRemaining)||reservationsRemaining<0||reservationAmounts.some(x=>!Number.isSafeInteger(x)||x<1)))){json(res,400,{error:'Paramètres du produit à temps limité invalides.'});return true}
+  const c=await pool.connect();try{await c.query('BEGIN');const old=await c.query('SELECT * FROM investment_offers WHERE id=$1 FOR UPDATE',[id]);if(!old.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Offre introuvable.'});return true}const used=await c.query("SELECT count(*)::int n FROM investments WHERE offer_id=$1 AND status IN ('approved','released')",[id]);if(stock!==null&&stock<Number(used.rows[0].n)){await c.query('ROLLBACK');json(res,409,{error:`Le stock total (${stock}) ne peut pas être inférieur aux ${Number(used.rows[0].n)} souscriptions déjà payées. Le stock disponible est ${Math.max(0,stock-Number(used.rows[0].n))}.`});return true}const reason=String(b.reason||'').trim();if(reason.length<3||reason.length>300){await c.query('ROLLBACK');json(res,400,{error:'Un motif de modification est obligatoire (3 à 300 caractères).'});return true}const oldConditions={code:old.rows[0].code,name:old.rows[0].name,description:old.rows[0].description,durationLabel:old.rows[0].duration_label,minAmountCfa:Number(old.rows[0].min_amount_cfa),displayValueCfa:Number(old.rows[0].display_value_cfa),defaultUserLimit:Number(old.rows[0].default_user_limit),stockLimit:old.rows[0].stock_limit,active:old.rows[0].active,imageUrl:old.rows[0].image_url,category:old.rows[0].category};const newConditions={code:old.rows[0].code,name,description,category,durationLabel:duration,minAmountCfa:min,displayValueCfa:value,defaultUserLimit:limit,stockLimit:stock,active,imageUrl:imageUrl||null};await c.query('UPDATE investment_offers SET name=$2,description=$3,category=$4,duration_label=$5,min_amount_cfa=$6,max_amount_cfa=$7,display_value_cfa=$8,default_user_limit=$9,active=$10,published=CASE WHEN $10=false THEN false ELSE published END,stock_limit=$11,image_url=$12,sale_start_at=$13,sale_end_at=$14,reservation_amounts_cfa=$15::jsonb,product_wallet_balance_cfa=$16,reservations_remaining=$17,updated_at=now() WHERE id=$1',[id,name,description,category,duration,min,max,value,limit,active,stock,imageUrl||null,saleStart,saleEnd,JSON.stringify(reservationAmounts),walletBalance,reservationsRemaining]);
+  // Propager la nouvelle limite par défaut aux membres sans limite personnelle explicitement attribuée.
+  // Les souscriptions déjà consommées restent comptabilisées.
+  await c.query(`UPDATE user_offer_quotas q SET total_limit=GREATEST($2,used.used_count),remaining=GREATEST(0,$2-used.used_count),assigned_at=now() FROM (SELECT u.id AS user_id,GREATEST(q2.total_limit-q2.remaining,COALESCE((SELECT count(*)::int FROM investments i WHERE i.user_id=u.id AND i.offer_id=$1 AND i.status IN ('approved','released')),0)) AS used_count FROM users u JOIN user_offer_quotas q2 ON q2.user_id=u.id AND q2.offer_id=$1 WHERE u.role='user' AND q2.assigned_by IS NULL) used WHERE q.user_id=used.user_id AND q.offer_id=$1 AND q.assigned_by IS NULL`,[id,limit]);await c.query('INSERT INTO offer_conditions_audit(offer_id,actor_id,old_conditions,new_conditions,reason) VALUES($1,$2,$3::jsonb,$4::jsonb,$5)',[id,a.id,JSON.stringify(oldConditions),JSON.stringify(newConditions),reason]);await c.query('INSERT INTO offer_stock_audit(offer_id,actor_id,old_stock_limit,new_stock_limit,reason) VALUES($1,$2,$3,$4,$5)',[id,a.id,old.rows[0].stock_limit,stock,reason]);await c.query('COMMIT');json(res,200,{ok:true});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+
+ if(req.method==='PUT' && url.pathname==='/api/admin/quotas/global'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;
+  const b=await readBody(req),remaining=Number(b.remaining),reason=String(b.reason||'').trim();
+  if(!Number.isSafeInteger(remaining)||remaining<0||remaining>100000||reason.length<3||reason.length>300||b.confirmed!==true){json(res,400,{error:'Quota restant invalide, confirmation globale absente ou motif obligatoire (3 à 300 caractères).'});return true}
+  const c=await pool.connect();try{
+   await c.query('BEGIN');
+   const offers=await c.query('SELECT id FROM investment_offers ORDER BY id FOR UPDATE');
+   if(!offers.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Aucune offre ORVIA 45 à mettre à jour.'});return true}
+   const changed=await c.query(`WITH members AS (
+     SELECT u.id AS user_id,o.id AS offer_id,q.total_limit AS old_total_limit,
+       COALESCE(q.total_limit-q.remaining,(SELECT count(*)::int FROM investments i WHERE i.user_id=u.id AND i.offer_id=o.id AND i.status IN ('approved','released'))) AS used_count
+     FROM users u CROSS JOIN investment_offers o
+     LEFT JOIN user_offer_quotas q ON q.user_id=u.id AND q.offer_id=o.id
+     WHERE u.role='user'
+   ), upserted AS (
+     INSERT INTO user_offer_quotas(user_id,offer_id,total_limit,remaining,assigned_by,assigned_at)
+     SELECT user_id,offer_id,used_count+$1,$1,$2,now() FROM members
+     ON CONFLICT(user_id,offer_id) DO UPDATE SET total_limit=EXCLUDED.total_limit,remaining=EXCLUDED.remaining,assigned_by=EXCLUDED.assigned_by,assigned_at=now()
+     RETURNING user_id,offer_id,total_limit
+   )
+   INSERT INTO user_offer_quota_audit(user_id,offer_id,actor_id,old_total_limit,new_total_limit,used_count,reason)
+   SELECT m.user_id,m.offer_id,$2,m.old_total_limit,u.total_limit,m.used_count,$3 FROM members m JOIN upserted u ON u.user_id=m.user_id AND u.offer_id=m.offer_id
+   RETURNING user_id,offer_id`,[remaining,a.id,reason]);
+   await c.query('UPDATE investment_offers SET default_user_limit=$1,updated_at=now()',[remaining]);
+   const updatedUsers=new Set(changed.rows.map(row=>String(row.user_id))).size;
+   await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,`user.offer_quota.global_updated: ${changed.rowCount} quota(s); quota restant=${remaining}; motif=${reason}`,'investment_offer_quota','all-offers']);
+   await c.query('COMMIT');json(res,200,{ok:true,remaining,updatedUsers,updatedQuotas:changed.rowCount});return true;
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ const quotaMatch=url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/offers\/(\d+)\/quota$/);
+ if(req.method==='PUT' && quotaMatch){const a=await requireUser(req,res,'admin');if(!a)return true;const offerId=Number(quotaMatch[2]),b=await readBody(req),limit=Number(b.limit),reason=String(b.reason||'').trim();
+  if(!Number.isSafeInteger(limit)||limit<0||limit>100000||reason.length<3||reason.length>300){json(res,400,{error:'Limite invalide ou motif obligatoire (3 à 300 caractères).'});return true}
+  const c=await pool.connect();try{await c.query('BEGIN');const target=await c.query("SELECT id FROM users WHERE public_id=$1 AND role='user' FOR UPDATE",[decodeURIComponent(quotaMatch[1])]);if(!target.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Utilisateur introuvable.'});return true}const userId=target.rows[0].id;const offer=await c.query('SELECT id FROM investment_offers WHERE id=$1 FOR UPDATE',[offerId]);if(!offer.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Offre introuvable.'});return true}const prior=await c.query('SELECT * FROM user_offer_quotas WHERE user_id=$1 AND offer_id=$2 FOR UPDATE',[userId,offerId]);let used=0,oldLimit=null;
+   const consumed=await c.query("SELECT count(*)::int AS n FROM investments WHERE user_id=$1 AND offer_id=$2 AND status IN ('approved','released')",[userId,offerId]);
+   const investmentUsed=Number(consumed.rows[0]?.n||0);
+   if(prior.rowCount){oldLimit=Number(prior.rows[0].total_limit);used=Math.max(0,oldLimit-Number(prior.rows[0].remaining),investmentUsed)}
+   else {used=investmentUsed}
+   if(limit<used){await c.query('ROLLBACK');json(res,409,{error:`La nouvelle limite (${limit}) ne peut pas être inférieure aux ${used} souscriptions déjà utilisées.`});return true}
+   if(!prior.rowCount)await c.query('INSERT INTO user_offer_quotas(user_id,offer_id,total_limit,remaining,assigned_by) VALUES($1,$2,$3,$3,$4)',[userId,offerId,limit,a.id]);
+   else await c.query('UPDATE user_offer_quotas SET total_limit=$3,remaining=$3-$4,assigned_by=$5,assigned_at=now() WHERE user_id=$1 AND offer_id=$2',[userId,offerId,limit,used,a.id]);
+   await c.query('INSERT INTO user_offer_quota_audit(user_id,offer_id,actor_id,old_total_limit,new_total_limit,used_count,reason) VALUES($1,$2,$3,$4,$5,$6,$7)',[userId,offerId,a.id,oldLimit,limit,used,reason]);
+   await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'user.offer_quota.updated: '+reason,'user_offer_quota',String(userId)+':'+String(offerId)]);
+   await c.query('COMMIT');json(res,200,{ok:true,userId,offerId,limit,remaining:limit-used,used});return true;
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+ if(req.method==='GET' && url.pathname==='/api/admin/quota-audit'){const a=await requireUser(req,res,'admin');if(!a)return true;const publicId=String(url.searchParams.get('publicId')||'').trim();const q=await pool.query(`SELECT h.id,u.public_id,u.name,o.code,o.name offer_name,h.old_total_limit,h.new_total_limit,h.used_count,h.reason,h.created_at,actor.name actor_name FROM user_offer_quota_audit h JOIN users u ON u.id=h.user_id JOIN investment_offers o ON o.id=h.offer_id LEFT JOIN users actor ON actor.id=h.actor_id WHERE ($1='' OR u.public_id=$1) ORDER BY h.created_at DESC LIMIT 200`,[publicId]);json(res,200,{history:q.rows});return true}
+ if(req.method==='GET' && url.pathname==='/api/admin/support/messages'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const q=await pool.query(`SELECT m.id,m.user_id,m.sender_role,m.body,m.parent_id,m.is_read,m.created_at,u.public_id,u.name,u.email FROM support_messages m JOIN users u ON u.id=m.user_id ORDER BY m.created_at DESC LIMIT 500`);json(res,200,{messages:q.rows});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/support/reply'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req),userId=Number(b.userId),body=String(b.message||'').trim();if(!Number.isSafeInteger(userId)||userId<1||body.length<1||body.length>3000){json(res,400,{error:'Utilisateur ou message invalide.'});return true}const c=await pool.connect();try{await c.query('BEGIN');const u=await c.query("SELECT id FROM users WHERE id=$1 AND role='user' FOR UPDATE",[userId]);if(!u.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Utilisateur introuvable.'});return true}const m=await c.query("INSERT INTO support_messages(user_id,sender_role,body) VALUES($1,'admin',$2) RETURNING id,created_at",[userId,body]);await c.query('INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING',[userId,`support:${m.rows[0].id}:reply`,'Réponse du service client','Le service client a répondu à votre message.']);await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'support.reply','support_message',String(m.rows[0].id)]);await c.query('COMMIT');json(res,201,{ok:true});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/notifications'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const q=await pool.query('SELECT n.id,n.title,n.message,n.is_read,n.created_at,u.public_id,u.name,u.email FROM user_notifications n JOIN users u ON u.id=n.user_id ORDER BY n.created_at DESC LIMIT 500');json(res,200,{notifications:q.rows});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/notifications/send'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;const b=await readBody(req),publicId=String(b.publicId||'').trim(),title=String(b.title||'').trim(),message=String(b.message||'').trim();if(!/^SM-[A-Z0-9]{4,20}$/.test(publicId)||title.length<2||title.length>120||message.length<1||message.length>1000){json(res,400,{error:'Vérifiez l’identifiant ORVIA 45, le titre et le message.'});return true}const key=`admin:${crypto.randomUUID()}`;const q=await pool.query('INSERT INTO user_notifications(user_id,event_key,title,message) SELECT id,$2,$3,$4 FROM users WHERE public_id=$1 AND role=\'user\' RETURNING id',[publicId,key,title,message]);if(!q.rowCount){json(res,404,{error:'Utilisateur introuvable.'});return true}await pool.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[a.id,'notification.sent','user_notification',String(q.rows[0].id)]);json(res,201,{ok:true});return true;
+ }
+ if(req.method==='POST' && url.pathname==='/api/admin/notifications/read'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;await pool.query('UPDATE user_notifications SET is_read=true');json(res,200,{ok:true});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/investments'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;
+  const query=String(url.searchParams.get('q')||'').trim().slice(0,100),offerId=String(url.searchParams.get('offerId')||'').trim(),status=String(url.searchParams.get('status')||'').trim(),from=String(url.searchParams.get('from')||'').trim(),to=String(url.searchParams.get('to')||'').trim();
+  const validDate=v=>!v||/^\d{4}-\d{2}-\d{2}$/.test(v);
+  if((offerId&&!/^\d+$/.test(offerId))||(status&&!['approved','released'].includes(status))||!validDate(from)||!validDate(to)){json(res,400,{error:'Filtres de souscriptions invalides.'});return true}
+  const q=await pool.query(`SELECT i.id,i.amount_cfa,i.total_return_cfa,i.status,i.created_at,i.due_at,i.released_at,i.offer_id,i.offer_name_snapshot,i.offer_code_snapshot,i.duration_label_snapshot,i.min_amount_cfa_snapshot,i.display_value_cfa_snapshot,i.offer_description_snapshot,i.offer_conditions_snapshot,u.public_id,u.name,u.email,o.name offer_name,o.code offer_code,o.stock_limit,o.active FROM investments i JOIN users u ON u.id=i.user_id LEFT JOIN investment_offers o ON o.id=i.offer_id WHERE ($1='' OR u.public_id ILIKE '%'||$1||'%' OR u.name ILIKE '%'||$1||'%' OR u.email ILIKE '%'||$1||'%' OR COALESCE(i.offer_name_snapshot,o.name,'') ILIKE '%'||$1||'%') AND ($2='' OR i.offer_id=$2::bigint) AND ($3='' OR i.status=$3) AND ($4='' OR i.created_at >= $4::date) AND ($5='' OR i.created_at < $5::date+1) ORDER BY i.created_at DESC LIMIT 1000`,[query,offerId,status,from,to]);
+  const offers=await pool.query(`SELECT o.id,o.code,o.name,o.active,o.stock_limit,(SELECT count(*)::int FROM investments i WHERE i.offer_id=o.id AND i.status IN ('approved','released')) stock_used,(SELECT count(*)::int FROM investments i WHERE i.offer_id=o.id AND i.status IN ('approved','released'))::int sold FROM investment_offers o ORDER BY o.id DESC`);
+  const stats=await pool.query(`SELECT count(*)::int subscription_count,COALESCE(sum(amount_cfa),0)::bigint invested_cfa FROM investments WHERE status IN ('approved','released')`);
+  json(res,200,{investments:q.rows,offers:offers.rows,summary:{...stats.rows[0],offers_count:offers.rows.length},filters:{q:query,offerId,status,from,to}});return true
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/report'){const a=await requireUser(req,res,'admin');if(!a)return true;const from=String(url.searchParams.get('from')||'').slice(0,10),to=String(url.searchParams.get('to')||'').slice(0,10);const valid=v=>!v||/^\d{4}-\d{2}-\d{2}$/.test(v);if(!valid(from)||!valid(to)){json(res,400,{error:'Période invalide.'});return true}const q=await pool.query(`SELECT (SELECT COALESCE(sum(amount_cfa),0) FROM deposits WHERE status='approved' AND created_at>=COALESCE($1::date,'-infinity'::date) AND created_at<COALESCE($2::date+1,'infinity'::date))::bigint deposits_cfa,(SELECT COALESCE(sum(amount_cfa),0) FROM withdrawals WHERE status='paid' AND paid_at>=COALESCE($1::date,'-infinity'::date) AND paid_at<COALESCE($2::date+1,'infinity'::date))::bigint withdrawals_cfa,(SELECT COALESCE(sum(amount_cfa),0) FROM investments WHERE status IN ('approved','released') AND created_at>=COALESCE($1::date,'-infinity'::date) AND created_at<COALESCE($2::date+1,'infinity'::date))::bigint invested_cfa,(SELECT COALESCE(sum(total_return_cfa),0) FROM investments WHERE status='released' AND released_at>=COALESCE($1::date,'-infinity'::date) AND released_at<COALESCE($2::date+1,'infinity'::date))::bigint returns_released_cfa,(SELECT COALESCE(sum(amount_cfa),0) FROM referral_commissions WHERE created_at>=COALESCE($1::date,'-infinity'::date) AND created_at<COALESCE($2::date+1,'infinity'::date))::bigint commissions_cfa`,[from||null,to||null]);json(res,200,{from,to,totals:q.rows[0]});return true}
+ if(req.method==='GET' && url.pathname==='/api/admin/accounting/audit'){const a=await requireUser(req,res,'admin');if(!a)return true;const c=await pool.connect();try{const q=await c.query(`WITH unbalanced AS (SELECT jt.id,jt.event_key,jt.event_type,jt.amount_cfa,COALESCE(sum(jl.debit_cfa),0)::bigint debit_cfa,COALESCE(sum(jl.credit_cfa),0)::bigint credit_cfa FROM journal_transactions jt LEFT JOIN journal_lines jl ON jl.transaction_id=jt.id GROUP BY jt.id HAVING COALESCE(sum(jl.debit_cfa),0)<>COALESCE(sum(jl.credit_cfa),0) OR count(jl.id)=0), missing AS (SELECT 'deposit'::text kind,d.id,d.user_id,d.amount_cfa FROM deposits d WHERE d.status='approved' AND NOT EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='deposit:'||d.id||':approved') UNION ALL SELECT 'investment_execution',i.id,i.user_id,i.amount_cfa FROM investments i WHERE i.status IN ('approved','released') AND NOT EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='investment:'||i.id||':executed') UNION ALL SELECT 'investment_release',i.id,i.user_id,COALESCE(i.total_return_cfa,i.amount_cfa) FROM investments i WHERE i.status='released' AND NOT EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='investment:'||i.id||':released') UNION ALL SELECT 'withdrawal_request',w.id,w.user_id,w.amount_cfa FROM withdrawals w WHERE w.status IN ('pending','approved','paid') AND NOT EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='withdrawal:'||w.id||':requested') UNION ALL SELECT 'withdrawal_paid',w.id,w.user_id,w.amount_cfa FROM withdrawals w WHERE w.status='paid' AND NOT EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='withdrawal:'||w.id||':paid') UNION ALL SELECT 'withdrawal_rejected',w.id,w.user_id,w.amount_cfa FROM withdrawals w WHERE w.status='rejected' AND EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='withdrawal:'||w.id||':requested') AND NOT EXISTS(SELECT 1 FROM journal_transactions jt WHERE jt.event_key='withdrawal:'||w.id||':rejected')), totals AS (SELECT COALESCE(sum(debit_cfa),0)::bigint debits,COALESCE(sum(credit_cfa),0)::bigint credits FROM journal_lines) SELECT (SELECT count(*) FROM journal_transactions)::int journal_count,(SELECT count(*) FROM unbalanced)::int unbalanced_count,(SELECT count(*) FROM missing)::int missing_entries_count,totals.debits,totals.credits,(SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT * FROM unbalanced ORDER BY id DESC LIMIT 50)x) unbalanced_examples,(SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT * FROM missing ORDER BY id DESC LIMIT 50)x) missing_examples FROM totals`);const r=q.rows[0];r.ok=Number(r.unbalanced_count)===0&&Number(r.missing_entries_count)===0&&String(r.debits)===String(r.credits);r.checked_at=new Date().toISOString();json(res,200,r);return true}finally{c.release()}}
+ if(req.method==='GET' && url.pathname==='/api/admin/payment-supervision'){
+  const a=await requireUser(req,res,'admin');if(!a)return true;
+  const from=String(url.searchParams.get('from')||'').trim(),to=String(url.searchParams.get('to')||'').trim(),provider=String(url.searchParams.get('provider')||'').trim().toLowerCase(),status=String(url.searchParams.get('status')||'').trim().toLowerCase();
+  if((from&&!/^\d{4}-\d{2}-\d{2}$/.test(from))||(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to))||(provider&&!['flooz','tmoney','other'].includes(provider))||(status&&!['pending','approved','rejected','paid'].includes(status))){json(res,400,{error:'Filtres de supervision invalides.'});return true}
+  if(from&&to&&from>to){json(res,400,{error:'La date de début doit précéder la date de fin.'});return true}
+  const q=await pool.query(`WITH tx AS (
+    SELECT 'deposit'::text kind,d.id,d.user_id,d.amount_cfa,d.provider,d.provider_reference,d.status,d.created_at,d.payment_verified,d.verification_method,u.public_id,u.name
+    FROM deposits d JOIN users u ON u.id=d.user_id
+    UNION ALL
+    SELECT 'withdrawal'::text,w.id,w.user_id,w.amount_cfa,w.provider,w.provider_reference,w.status,w.created_at,false::boolean,'manual'::text,u.public_id,u.name
+    FROM withdrawals w JOIN users u ON u.id=w.user_id
+  ), filtered AS (
+    SELECT * FROM tx WHERE ($1::date IS NULL OR created_at >= $1::date) AND ($2::date IS NULL OR created_at < ($2::date + interval '1 day')) AND ($3='' OR provider=$3) AND ($4='' OR status=$4)
+  ), duplicate_refs AS (
+    SELECT lower(provider_reference) ref FROM tx WHERE provider_reference IS NOT NULL AND btrim(provider_reference)<>'' GROUP BY lower(provider_reference) HAVING count(*)>1
+  ), stats AS (
+    SELECT count(*)::int total_count,count(*) FILTER(WHERE kind='deposit' AND status='pending')::int deposits_pending_count,
+      COALESCE(sum(amount_cfa) FILTER(WHERE kind='deposit' AND status='pending'),0)::bigint deposits_pending_cfa,
+      count(*) FILTER(WHERE kind='deposit' AND status='approved')::int deposits_confirmed_count,
+      COALESCE(sum(amount_cfa) FILTER(WHERE kind='deposit' AND status='approved'),0)::bigint deposits_confirmed_cfa,
+      count(*) FILTER(WHERE kind='withdrawal' AND status IN ('pending','approved'))::int withdrawals_pending_count,
+      COALESCE(sum(amount_cfa) FILTER(WHERE kind='withdrawal' AND status IN ('pending','approved')),0)::bigint withdrawals_pending_cfa,
+      count(*) FILTER(WHERE kind='withdrawal' AND status='paid')::int withdrawals_paid_count,
+      COALESCE(sum(amount_cfa) FILTER(WHERE kind='withdrawal' AND status='paid'),0)::bigint withdrawals_paid_gross_cfa,
+      count(*) FILTER(WHERE kind='deposit' AND status='rejected')::int deposits_rejected_count,
+      count(*) FILTER(WHERE kind='withdrawal' AND status='rejected')::int withdrawals_rejected_count
+    FROM filtered
+  ), providers AS (
+    SELECT provider,count(*)::int transaction_count,COALESCE(sum(amount_cfa) FILTER(WHERE kind='deposit' AND status='approved'),0)::bigint deposits_confirmed_cfa,
+      COALESCE(sum(amount_cfa) FILTER(WHERE kind='withdrawal' AND status='paid'),0)::bigint withdrawals_paid_cfa
+    FROM filtered GROUP BY provider
+  )
+  SELECT (SELECT row_to_json(stats) FROM stats) stats,
+    (SELECT COALESCE(json_agg(p ORDER BY p.provider),'[]'::json) FROM providers p) providers,
+    (SELECT count(*)::int FROM filtered f JOIN duplicate_refs d ON lower(f.provider_reference)=d.ref) duplicate_reference_rows,
+    (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,id,public_id,name,amount_cfa,provider,provider_reference,status,created_at,payment_verified,verification_method FROM filtered ORDER BY created_at DESC LIMIT 150)x) transactions`,[from||null,to||null,provider,status]);
+  const d=q.rows[0];json(res,200,{...d,filters:{from,to,provider,status},generated_at:new Date().toISOString()});return true;
+ }
+ if(req.method==='GET' && url.pathname==='/api/admin/summary'){const u=await requireUser(req,res,'admin');if(!u)return true;const q=await pool.query(`WITH balances AS (SELECT account_code,COALESCE(sum(debit_cfa-credit_cfa),0)::bigint debit_balance,COALESCE(sum(credit_cfa-debit_cfa),0)::bigint credit_balance FROM journal_lines GROUP BY account_code), totals AS (SELECT COALESCE((SELECT debit_balance FROM balances WHERE account_code='cash_held'),0)::bigint cash_held_cfa,COALESCE((SELECT credit_balance FROM balances WHERE account_code='user_wallet_liability'),0)::bigint user_wallets_due_cfa,COALESCE((SELECT credit_balance FROM balances WHERE account_code='investment_liability'),0)::bigint invested_funds_cfa,COALESCE((SELECT credit_balance FROM balances WHERE account_code='withdrawal_fee_revenue'),0)::bigint withdrawal_fees_cfa,COALESCE((SELECT debit_balance FROM balances WHERE account_code='commission_expense'),0)::bigint commissions_expense_cfa) SELECT (SELECT count(*) FROM users WHERE role='user')::int users,(SELECT count(*) FROM users WHERE role='user' AND status='active')::int active_users,(SELECT count(*) FROM users WHERE role='user' AND status='suspended')::int suspended_users,(SELECT count(*) FROM deposits WHERE status='pending')::int pending_deposits,(SELECT count(*) FROM deposits WHERE status='approved')::int approved_deposits,(SELECT COALESCE(sum(amount_cfa),0) FROM deposits WHERE status='approved')::bigint approved_deposit_total_cfa,(SELECT count(*) FROM referral_commissions)::int commissions,(SELECT COALESCE(sum(amount_cfa),0) FROM referral_commissions)::bigint commissions_total_cfa,(SELECT count(*) FROM withdrawals WHERE status IN ('pending','approved'))::int pending_withdrawals,(SELECT COALESCE(sum(amount_cfa),0) FROM withdrawals WHERE status IN ('pending','approved'))::bigint pending_withdrawals_cfa,(SELECT COALESCE(sum(amount_cfa),0) FROM withdrawals WHERE status='paid')::bigint withdrawals_paid_cfa,(SELECT count(*) FROM investments WHERE status='pending')::int pending_investments,(SELECT COALESCE(sum(amount_cfa),0) FROM investments WHERE status='approved')::bigint investments_approved_cfa,totals.* FROM totals`);const d=q.rows[0];d.smile_net_funds_cfa=Number(d.cash_held_cfa)-Number(d.user_wallets_due_cfa)-Number(d.invested_funds_cfa);d.accounting_status='active';d.accounting_basis='Grand livre en partie double';json(res,200,d);return true}
+ if(req.method==='GET' && url.pathname==='/api/admin/deposits'){const u=await requireUser(req,res,'admin');if(!u)return true;const q=await pool.query(`SELECT d.id,d.user_id,d.amount_cfa,d.provider,d.provider_reference,d.payment_verified,d.status,d.created_at,d.approved_at,u.public_id,u.name,u.email FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY CASE d.status WHEN 'pending' THEN 0 ELSE 1 END,d.created_at DESC LIMIT 200`);json(res,200,{deposits:q.rows});return true}
+ if(req.method==='POST' && url.pathname==='/api/admin/deposits/reject'){const u=await requireUser(req,res,'admin');if(!u)return true;const b=await readBody(req),id=Number(b.depositId),reason=String(b.reason||'').trim();if(!Number.isInteger(id)||id<1||reason.length<3||reason.length>300){json(res,400,{error:'Identifiant ou motif de rejet invalide.'});return true}const c=await pool.connect();try{await c.query('BEGIN');const q=await c.query("UPDATE deposits SET status='rejected',approved_by=$2,approved_at=now() WHERE id=$1 AND status='pending' RETURNING id,user_id,amount_cfa",[id,u.id]);if(!q.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Dépôt en attente introuvable.'});return true}await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[u.id,'deposit.rejected: '+reason,'deposit',String(id)]);await c.query(`INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING`,[q.rows[0].user_id,`deposit:${id}:rejected`,'Dépôt rejeté',`Votre dépôt de ${Number(q.rows[0].amount_cfa).toLocaleString('fr-FR')} FCFA a été rejeté. Motif : ${reason}`]);await c.query('COMMIT');json(res,200,{ok:true});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+ if(req.method==='POST' && url.pathname==='/api/admin/deposits/approve'){const u=await requireUser(req,res,'admin');if(!u)return true;const b=await readBody(req), id=Number(b.depositId);if(!Number.isInteger(id)||id<1){json(res,400,{error:'Identifiant de dépôt invalide.'});return true}const c=await pool.connect();try{await c.query('BEGIN');const d=await c.query("SELECT * FROM deposits WHERE id=$1 AND status='pending' FOR UPDATE",[id]);if(!d.rowCount){await c.query('ROLLBACK');json(res,404,{error:'Dépôt en attente introuvable.'});return true}const dep=d.rows[0];const confirmedReference=String(b.confirmedReference||'').trim(),confirmedAmount=Number(b.confirmedAmount);if(b.confirmedReceived!==true||!dep.provider_reference||confirmedReference!==dep.provider_reference||!Number.isSafeInteger(confirmedAmount)||confirmedAmount!==Number(dep.amount_cfa)){await c.query('ROLLBACK');json(res,400,{error:'Vérification refusée : confirmez la réception réelle, le montant exact et la référence identique au reçu.'});return true}await c.query("UPDATE deposits SET payment_verified=true,status='approved',approved_by=$2,approved_at=now(),verified_by=$2,verified_at=now(),verification_method='manual' WHERE id=$1",[id,u.id]);await postJournal(c,{eventKey:`deposit:${id}:approved`,eventType:'deposit_approved',userId:dep.user_id,amount:Number(dep.amount_cfa),description:'Dépôt validé et crédité au portefeuille',lines:[{account:'cash_held',debit:Number(dep.amount_cfa)},{account:'user_wallet_liability',credit:Number(dep.amount_cfa)}]});await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[dep.user_id]);const first=await c.query("SELECT count(*)::int n FROM deposits WHERE user_id=$1 AND status='approved'",[dep.user_id]);const depositorSpecial=await c.query('SELECT 1 FROM special_commission_accounts WHERE user_id=$1',[dep.user_id]);if(Number(first.rows[0].n)===1&&!depositorSpecial.rowCount){
+   const fi=await c.query('INSERT INTO first_investments(user_id,deposit_id,amount_cfa) VALUES($1,$2,$3) ON CONFLICT(user_id) DO NOTHING RETURNING id',[dep.user_id,id,Number(dep.amount_cfa)]);
+   if(fi.rowCount){
+    const ancestry=await c.query(`WITH RECURSIVE a(id,sponsor_id,level) AS (SELECT id,sponsor_id,0 FROM users WHERE id=$1 UNION ALL SELECT x.id,x.sponsor_id,a.level+1 FROM users x JOIN a ON x.id=a.sponsor_id WHERE a.level<3) SELECT id,level FROM a WHERE level BETWEEN 1 AND 3 ORDER BY level`,[dep.user_id]);
+    const rates=[1000,300,100];
+    for(const anc of ancestry.rows){const rate=rates[anc.level-1],commission=Math.round(Number(dep.amount_cfa)*rate/10000);if(!commission)continue;const cr=await c.query('INSERT INTO referral_commissions(beneficiary_id,referred_user_id,first_investment_id,level,rate_basis_points,amount_cfa) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(referred_user_id,level) DO NOTHING RETURNING id',[anc.id,dep.user_id,fi.rows[0].id,anc.level,rate,commission]);if(cr.rowCount)await postJournal(c,{eventKey:`commission:${cr.rows[0].id}:credited`,eventType:'referral_commission',userId:anc.id,amount:commission,description:`Commission de parrainage niveau ${anc.level} après premier dépôt validé`,lines:[{account:'commission_expense',debit:commission},{account:'user_wallet_liability',credit:commission}]});}
+   }
+   const claim=await c.query('INSERT INTO special_first_deposit_claims(depositor_user_id,deposit_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING deposit_id',[dep.user_id,id]);if(claim.rowCount){const targets=await c.query('SELECT id,user_id,active FROM special_commission_accounts ORDER BY id');for(const sa of targets.rows){const earned=sa.active,commission=Math.floor(Number(dep.amount_cfa)*0.12),status=earned?'credited':'forfeited';const inserted=await c.query('INSERT INTO special_commissions(special_account_id,deposit_id,depositor_user_id,amount_cfa,status) VALUES($1,$2,$3,$4,$5) ON CONFLICT(special_account_id,deposit_id) DO NOTHING RETURNING id',[sa.id,id,dep.user_id,commission,status]);if(inserted.rowCount&&earned){await postJournal(c,{eventKey:`special-commission:${inserted.rows[0].id}:credited`,eventType:'special_commission',userId:sa.user_id,amount:commission,description:'Commission de 12 % sur le premier dépôt confirmé',lines:[{account:'commission_expense',debit:commission},{account:'user_wallet_liability',credit:commission}]});}await c.query('INSERT INTO special_control_audit(actor_id,special_account_id,action,details) VALUES($1,$2,$3,$4)',[u.id,sa.id,earned?'commission.credited':'commission.forfeited',JSON.stringify({depositId:id,depositorUserId:dep.user_id,amountCfa:earned?commission:0,depositAmountCfa:Number(dep.amount_cfa)})]);}}}await c.query('INSERT INTO audit_logs(actor_id,action,entity_type,entity_id) VALUES($1,$2,$3,$4)',[u.id,'deposit.approved.manual_verified','deposit',String(id)]);await c.query(`INSERT INTO user_notifications(user_id,event_key,title,message) VALUES($1,$2,$3,$4) ON CONFLICT(event_key) DO NOTHING`,[dep.user_id,`deposit:${id}:approved`,'Dépôt validé',`Votre dépôt de ${Number(dep.amount_cfa).toLocaleString('fr-FR')} FCFA est validé. Votre portefeuille a été crédité.`]);await c.query('COMMIT');json(res,200,{ok:true});return true}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
+
+ return false;
+}
+const server=http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localhost');if(url.pathname.startsWith('/api/')){if(await api(req,res,url))return;json(res,404,{error:'Route introuvable.'});return}if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end('Method not allowed');return}let p=decodeURIComponent(url.pathname);if(p==='/')p='/index.html';const file=path.resolve(ROOT,'.'+p);if(!file.startsWith(ROOT+path.sep)){res.writeHead(403);res.end('Forbidden');return}fs.readFile(file,(err,data)=>{if(err){res.writeHead(404);res.end('Not found');return}res.writeHead(200,{'Content-Type':MIME[path.extname(file)]||'application/octet-stream','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"});res.end(data)})}catch(e){console.error(e);if(!res.headersSent)json(res,e.statusCode||500,{error:e.statusCode?e.message:'Erreur interne.'});else res.destroy()}});
+ensureSchema().then(()=>{server.listen(PORT,()=>console.log(`ORVIA 45 prêt sur le port ${PORT}`))}).catch(e=>{console.error('Impossible de démarrer ORVIA 45:',e.message);process.exit(1)});

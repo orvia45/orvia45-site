@@ -1,0 +1,8 @@
+SMILE v1.52.3 — CORRECTION DE LA LIMITE PERSONNELLE
+
+Correction : lorsqu’un administrateur modifie la limite par défaut d’une offre, les limites déjà initialisées des membres sans attribution personnelle explicite sont synchronisées.
+Les souscriptions approuvées/libérées déjà consommées sont conservées : total = max(nouvelle limite, consommé), restant = max(0, nouvelle limite - consommé).
+Les limites personnelles explicitement attribuées par l’administration ne sont pas écrasées par une modification de la limite par défaut de l’offre.
+
+Vérifications locales : 68 tests automatisés réussis, 0 échec. Syntaxe Node vérifiée.
+Non vérifié : déploiement Render, navigateur réel et base PostgreSQL de production.

@@ -1,0 +1,8 @@
+SMILE v1.53.2 — Intégration des conditions SUPER CRYPTO
+
+- Ajout de l'affichage des conditions VIP1 à VIP10 avant l'écran de souscription.
+- Le bouton de l'étape intermédiaire est « CONFIRMER ».
+- VIP9 et VIP10 : recharge totale des subordonnés fixée à 60 000 000 XOF chacun.
+- Les conditions personnelles, effectifs et montants communiqués sont affichés par produit.
+
+Limite importante : cette modification ajoute l'étape d'information côté interface. Le contrôle automatique de l'éligibilité à partir des données réelles des équipes doit être implémenté et testé côté serveur avant d'autoriser des souscriptions réelles.

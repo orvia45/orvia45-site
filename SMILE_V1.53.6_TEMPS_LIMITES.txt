@@ -1,0 +1,23 @@
+SMILE v1.53.6 — PRÉPARATION DES PRODUITS À TEMPS LIMITÉ
+
+ADMINISTRATION
+- Le formulaire de gestion des offres accepte les produits de catégorie « Temps limité ».
+- Champs programmables : début et fin de vente, montants de réservation proposés, solde du portefeuille produit et nombre de réservations restantes.
+- Les produits peuvent être créés en brouillon, modifiés, lancés, suspendus et retirés du catalogue utilisateur depuis les actions administrateur.
+- Le retrait du catalogue utilisateur conserve les enregistrements financiers et historiques existants.
+
+ESPACE UTILISATEUR
+- Les produits programmés affichent un compte à rebours avant l’ouverture.
+- Après l’ouverture, un compte à rebours indique le temps restant avant la fin.
+- À expiration, le produit est automatiquement exclu du catalogue par la requête serveur et les achats sont refusés côté serveur.
+- Les achats sont également refusés avant l’heure de début, même si un utilisateur tente d’appeler directement l’API.
+
+LIMITES DE CETTE VERSION
+- Les montants de réservation et les compteurs sont configurables et affichables, mais le parcours transactionnel complet « Réserver », son débit éventuel, son suivi utilisateur et le tableau de bord des réservations nécessitent une prochaine étape dédiée. Aucun montant n’est débité par une simple réservation dans cette version.
+- Le solde du portefeuille produit est un champ de configuration/suivi et n’est pas relié au grand livre comptable.
+- Le déploiement sur l’hébergement et les essais avec la base PostgreSQL de production restent à effectuer.
+
+SÉCURITÉ ET COMPATIBILITÉ
+- Les contrôles de disponibilité sont appliqués côté serveur.
+- Les souscriptions, achats et traces financières existants ne sont pas supprimés lorsqu’un produit est retiré du catalogue.
+- Les règles VIP, les paiements manuels Flooz/Mixx et les validations administratives existantes ne sont pas modifiés volontairement.

@@ -1,0 +1,12 @@
+SMILE v1.53.7 — RÉSERVATIONS SM DURÉE LIMITÉE PAYÉES INTÉGRALEMENT
+
+- Le montant choisi parmi les montants de réservation configurés est le prix définitif du produit.
+- À confirmation, le serveur vérifie la disponibilité, les dates, le stock, la limite personnelle, le nombre de réservations restantes et le solde disponible.
+- Le prix total est débité une seule fois du portefeuille SMILE dans une transaction PostgreSQL verrouillée et idempotente.
+- La réservation est enregistrée comme achat intégralement payé et apparaît dans « Mes produits ». Aucun solde restant n’est dû.
+- Aucune annulation ni aucun remboursement ne sont proposés pour ces réservations.
+- Le compteur de réservations restantes diminue et le portefeuille comptable du produit augmente du montant encaissé. L’administration affiche le nombre de réservations payées et le compteur restant.
+- Les achats et écritures financières sont conservés dans l’historique/audit. Les dépôts et retraits Mobile Money restent soumis à validation administrative manuelle, sans automatisation.
+- Pour les montants alternatifs, le montant total prévu est calculé proportionnellement au rapport montant choisi / montant de référence configuré.
+
+Important : cette mise à jour du code ne déploie pas le serveur et ne modifie pas la base de données de l’hébergement. Exécuter les migrations SQL et déployer le paquet avant toute utilisation réelle.

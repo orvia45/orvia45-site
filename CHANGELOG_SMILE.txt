@@ -1,0 +1,7 @@
+
+Version 1.54.6 — Ajustements Temps Limité
+- Retrait des quatre montants de réservation de la fiche produit initiale ; choix conservés dans la fenêtre de réservation/souscription et dans l’administration.
+- Fenêtre de réservation/souscription compactée pour mobile, avec bouton Retour.
+- Intégration de la nouvelle affiche rose carrée SMILE Durée limitée.
+
+Version 1.54.8 — retrait des mentions de brouillon et de profit indicatif/non garanti de l’affichage utilisateur. Le statut interne reste géré côté administration.
