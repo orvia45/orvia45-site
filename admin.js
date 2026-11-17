@@ -43,14 +43,8 @@ function openAdminSection(name,opts={}){
 }
 history.replaceState({smileAdminSection:'overview'},'',location.pathname+location.search+location.hash);
 window.addEventListener('popstate',event=>{const target=event.state?.smileAdminSection||smileAdminSectionStack.pop()||'overview';const idx=smileAdminSectionStack.lastIndexOf(target);if(idx>=0)smileAdminSectionStack.splice(idx);openAdminSection(target,{fromBack:true})});
-document.addEventListener('click',event=>{
- const trigger=event.target.closest('.nav-item,[data-goto]');
- if(!trigger)return;
- const name=trigger.dataset.section||trigger.dataset.goto;
- if(!name)return;
- event.preventDefault();
- openAdminSection(name);
-});
+document.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click',()=>openAdminSection(btn.dataset.section)));
+document.querySelectorAll('[data-goto]').forEach(btn=>btn.addEventListener('click',()=>openAdminSection(btn.dataset.goto)));
 
 async function loadQuotaOffers(){try{const d=await api('/api/admin/offers');$('#quota-offer').innerHTML=d.offers.map(o=>`<option value="${o.id}">${o.name} — ${o.duration_label}</option>`).join('')}catch(e){$('#quota-status').textContent=e.message;$('#global-quota-status').textContent=e.message}}
 $('#quota-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget),id=String(f.get('publicId')).trim(),offer=String(f.get('offerId')),limit=Number(f.get('limit')),reason=String(f.get('reason')).trim();$('#quota-status').textContent='Enregistrement…';try{const result=await api(`/api/admin/users/${encodeURIComponent(id)}/offers/${offer}/quota`,{method:'PUT',body:JSON.stringify({limit,reason})});$('#quota-status').textContent=`Limite personnelle enregistrée : ${result.limit} au total, ${result.used} déjà utilisée(s), ${result.remaining} restante(s). Le membre doit actualiser son compte pour voir la nouvelle limite. Historique et motif conservés.`;await loadQuotaAudit()}catch(err){$('#quota-status').textContent=err.message}});
