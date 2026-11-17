@@ -52,7 +52,8 @@ test('le compte utilisateur propose IA en premier, avec des tuiles actives et le
   assert.match(account, /data-open-category="limited"/);
   assert.match(account, /data-open-category="daily"/);
   assert.match(account, /data-open-category="team"/);
-  assert.match(app, /iaCategory=categoryButton\.dataset\.openCategory/);
+  assert.match(app, /const base=categoryButton\.dataset\.openCategory/);
+  assert.match(app, /offerRubricKey/);
   assert.match(app, /classList\.toggle\("active",x===categoryButton\)/);
   assert.match(css, /account-grid \.account-option\.active[\s\S]*#1675d1/);
   assert.doesNotMatch(user, /vérification d'identité|verification d'identite/i);

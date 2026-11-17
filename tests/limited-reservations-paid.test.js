@@ -15,7 +15,7 @@ test('une réservation limitée exige un prix configuré et un stock de réserva
 
 test('la réservation est un achat intégral débité dans le grand livre et marqué non annulable/non remboursable', () => {
   assert.match(server, /limited_reservation_paid/);
-  assert.match(server, /reservationPaidInFull:isLimited/);
+  assert.match(server, /reservationPaidInFull:isPreReservation/);
   assert.match(server, /cancelable:false,refundable:false/);
   assert.match(server, /user_wallet_liability',debit:amount/);
 });
@@ -25,8 +25,8 @@ test('le paiement incrémente le portefeuille produit et diminue le nombre de r�
 });
 
 test('le membre choisit un prix final et confirme explicitement le paiement définitif', () => {
-  assert.match(app, /Montant réservé/);
-  assert.match(app, /Confirmer la réservation/);
+  assert.match(app, /Montant de pré-réservation/);
+  assert.match(app, /Confirmer la pré-réservation/);
   assert.match(app, /aucune annulation ni aucun remboursement/i);
 });
 
@@ -46,10 +46,11 @@ test('aucun produit de démonstration n’est créé et l’ancien est neutralis
 test('la réservation anticipée active le produit à la date programmée', () => {
   assert.match(server, /activationAt:startAt\.toISOString\(\)/);
   assert.match(app, /Réservé — activation à venir/);
-  assert.match(app, /Fin de l’offre dans/);
-  assert.match(app, /Compte à rebours avant la mise en ligne/);
+  assert.match(app, /Fin des pré-réservations dans/);
+  assert.match(app, /Ouverture officielle des ventes dans/);
   assert.match(app, /data-limited-countdown=\"\$\{escapeIA\(o\.sale_start_at\|\|''\)\}\"/);
-  assert.match(app, />Réserver</);
+  assert.match(app, /o\.reservation_end_at/);
+  assert.match(app, /Réserver et payer/);
 });
 
 test('un produit limité en brouillon reste caché aux membres jusqu’à publication admin', () => {
