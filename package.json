@@ -1,6 +1,6 @@
 {
   "name": "smile-platform",
-  "version": "1.54.9",
+  "version": "1.54.10",
   "private": true,
   "description": "SMILE - demandes Mobile Money manuelles Flooz/Mixx (TMoney) avec validation administrateur",
   "scripts": {

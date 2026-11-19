@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = 'smile-shell-v1.54.9';
+const CACHE_NAME = 'smile-shell-v1.54.10';
 const APP_SHELL = [
   '/', '/index.html', '/style.css', '/splash.js', '/app.js',
   '/support-links.js', '/home-records.js', '/password-toggle.js',

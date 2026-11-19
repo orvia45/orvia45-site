@@ -1,3 +1,8 @@
+SMILE v1.54.10 — Rubrique Compte marchand
+- Déplacement de la configuration des numéros de réception depuis les opérations vers une rubrique indépendante « Compte marchand », placée juste à côté de « Contrôle » dans le menu administrateur.
+- La rubrique contient les formulaires de configuration Flooz et Mixx/TMoney, avec activation/désactivation et remplacement des numéros.
+- Conservation du numéro destinataire dans l’historique de chaque dépôt et validation administrative manuelle obligatoire.
+
 SMILE v1.54.9 — Gestion des numéros de réception Flooz/Mixx
 - Ajout de la rubrique administrateur « Gestion des dépôts ».
 - Un numéro de réception unique et activable/désactivable par opérateur (Flooz et Mixx/TMoney).

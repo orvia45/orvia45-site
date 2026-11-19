@@ -19,12 +19,13 @@
   <p class="side-label">OPÉRATIONS</p>
   <button class="nav-item" data-section="finance"><span>↔</span> Gestion financière</button>
   <button class="nav-item" data-section="payments"><span>◷</span> Supervision des paiements</button>
-  <button class="nav-item" data-section="deposit-settings"><span>☎</span> Gestion des dépôts</button>
+  
   <button class="nav-item" data-section="accounts"><span>♙</span> Comptes & parrainage</button>
   <p class="side-label">SUIVI</p>
   <button class="nav-item" data-section="support"><span>✉</span> Service client</button>
   <button class="nav-item" data-section="reports"><span>▤</span> Comptabilité & rapports</button>
   <button class="nav-item" data-section="control"><span>⚙</span> Contrôle</button>
+  <button class="nav-item" data-section="deposit-settings"><span>▣</span> Compte marchand</button>
 </aside>
 <div class="admin-content">
 <section class="admin-panel active" data-panel="overview">
@@ -75,7 +76,7 @@
   <article class="module payment-history"><div class="deposit-head"><div><b>Historique des transactions</b><p>150 opérations récentes au maximum pour les filtres sélectionnés.</p></div></div><div class="table-scroll"><table class="payment-table"><thead><tr><th>Date</th><th>Type</th><th>Utilisateur</th><th>Opérateur</th><th>Référence</th><th>Montant</th><th>Statut</th></tr></thead><tbody id="payment-transaction-rows"><tr><td colspan="7">Aucune donnée chargée.</td></tr></tbody></table></div></article>
 </section>
 <section class="admin-panel" data-panel="deposit-settings" hidden>
- <div class="panel-heading"><div><h2>Gestion des dépôts</h2><p>Configurez le numéro de réception affiché aux utilisateurs. Un seul numéro actif par opérateur ; le remplacement ne modifie jamais les opérations historiques.</p></div><button id="refresh-deposit-settings" class="outline" type="button">Actualiser</button></div>
+ <div class="panel-heading"><div><h2>Compte marchand</h2><p>Gérez les numéros de réception des dépôts Flooz et Mixx. Un seul numéro actif par opérateur ; le remplacement ne modifie jamais les opérations historiques.</p></div><button id="refresh-deposit-settings" class="outline" type="button">Actualiser</button></div>
  <div class="modules">
   <article class="module"><h3>Réception Flooz</h3><form id="deposit-settings-flooz"><label>Numéro de réception Flooz</label><input name="phone" type="tel" minlength="8" maxlength="30" placeholder="Ex. +228…"><label class="check-line"><input name="enabled" type="checkbox"> Activer ce numéro pour les dépôts</label><button class="primary" type="submit">Enregistrer Flooz</button><p id="deposit-settings-flooz-status" class="hint" role="status"></p></form></article>
   <article class="module"><h3>Réception Mixx (TMoney)</h3><form id="deposit-settings-tmoney"><label>Numéro de réception Mixx (TMoney)</label><input name="phone" type="tel" minlength="8" maxlength="30" placeholder="Ex. +228…"><label class="check-line"><input name="enabled" type="checkbox"> Activer ce numéro pour les dépôts</label><button class="primary" type="submit">Enregistrer Mixx</button><p id="deposit-settings-tmoney-status" class="hint" role="status"></p></form></article>
