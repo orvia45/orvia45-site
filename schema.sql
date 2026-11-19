@@ -141,39 +141,6 @@ ALTER TABLE investments ADD COLUMN IF NOT EXISTS duration_label_snapshot VARCHAR
 ALTER TABLE investments ADD COLUMN IF NOT EXISTS min_amount_cfa_snapshot BIGINT;
 ALTER TABLE investments ADD COLUMN IF NOT EXISTS display_value_cfa_snapshot BIGINT;
 ALTER TABLE investments ADD COLUMN IF NOT EXISTS offer_description_snapshot TEXT;
-
--- Verrou contractuel : une souscription exécutée conserve définitivement ses conditions.
--- Même un UPDATE SQL direct ne peut modifier ni supprimer son instantané payé.
-CREATE OR REPLACE FUNCTION protect_paid_investment_snapshot() RETURNS trigger AS $$
-BEGIN
- IF TG_OP = 'DELETE' THEN
-  IF OLD.offer_conditions_snapshot IS NOT NULL THEN
-   RAISE EXCEPTION 'Une souscription payée avec conditions figées ne peut pas être supprimée.';
-  END IF;
-  RETURN OLD;
- END IF;
- IF OLD.offer_conditions_snapshot IS NOT NULL AND (
-    NEW.offer_conditions_snapshot IS DISTINCT FROM OLD.offer_conditions_snapshot OR
-    NEW.offer_name_snapshot IS DISTINCT FROM OLD.offer_name_snapshot OR
-    NEW.offer_code_snapshot IS DISTINCT FROM OLD.offer_code_snapshot OR
-    NEW.duration_label_snapshot IS DISTINCT FROM OLD.duration_label_snapshot OR
-    NEW.min_amount_cfa_snapshot IS DISTINCT FROM OLD.min_amount_cfa_snapshot OR
-    NEW.display_value_cfa_snapshot IS DISTINCT FROM OLD.display_value_cfa_snapshot OR
-    NEW.offer_description_snapshot IS DISTINCT FROM OLD.offer_description_snapshot OR
-    NEW.offer_id IS DISTINCT FROM OLD.offer_id OR
-    NEW.amount_cfa IS DISTINCT FROM OLD.amount_cfa OR
-    NEW.total_return_cfa IS DISTINCT FROM OLD.total_return_cfa OR
-    NEW.due_at IS DISTINCT FROM OLD.due_at
- ) THEN
-  RAISE EXCEPTION 'Les conditions contractuelles d’une souscription payée sont immuables.';
- END IF;
- RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-DROP TRIGGER IF EXISTS investments_paid_snapshot_immutable ON investments;
-CREATE TRIGGER investments_paid_snapshot_immutable
- BEFORE UPDATE OR DELETE ON investments
- FOR EACH ROW EXECUTE FUNCTION protect_paid_investment_snapshot();
 -- Historique traçable des modifications de conditions et de stock par administrateur.
 CREATE TABLE IF NOT EXISTS offer_conditions_audit (
  id BIGSERIAL PRIMARY KEY,
@@ -303,9 +270,20 @@ ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS paid_by BIGINT REFERENCES users
 
 -- Paramètres programmables des produits SM Durée limitée (v1.53.6).
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS sale_start_at TIMESTAMPTZ;
-ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservation_end_at TIMESTAMPTZ;
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS sale_end_at TIMESTAMPTZ;
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservation_amounts_cfa JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS product_wallet_balance_cfa BIGINT NOT NULL DEFAULT 0 CHECK(product_wallet_balance_cfa>=0);
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS reservations_remaining INTEGER NOT NULL DEFAULT 0 CHECK(reservations_remaining>=0);
 ALTER TABLE investment_offers ADD COLUMN IF NOT EXISTS limited_deleted_at TIMESTAMPTZ;
+
+
+-- Numéros uniques de réception des dépôts, modifiables par l'administrateur.
+CREATE TABLE IF NOT EXISTS mobile_money_reception_settings (
+ provider VARCHAR(10) PRIMARY KEY CHECK(provider IN ('flooz','tmoney')),
+ phone VARCHAR(30), enabled BOOLEAN NOT NULL DEFAULT false,
+ updated_by BIGINT REFERENCES users(id), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ CHECK ((enabled = false) OR (phone IS NOT NULL AND length(trim(phone)) >= 8))
+);
+INSERT INTO mobile_money_reception_settings(provider,phone,enabled)
+VALUES ('flooz',NULL,false),('tmoney',NULL,false) ON CONFLICT(provider) DO NOTHING;
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(30);

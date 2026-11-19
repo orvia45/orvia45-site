@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#071a3c">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="ORVIA 45">
-<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/orvia45-192.png">
-<title>ORVIA 45</title>
-<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="orvia45-theme.css">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="SMILE">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/smile-192.png">
+<title>SMILE</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="smile-splash" class="smile-splash" role="status" aria-label="ORVIA 45">
-  <div class="orvia-splash-mark"><img src="/icons/orvia45-512.png" alt=""><strong>ORVIA 45</strong><small>ENSEMBLE, PLUS LOIN</small></div>
+<div id="smile-splash" class="smile-splash" role="status" aria-label="SMILE — Ensemble, plus loin">
+  <img src="/uploads/smile-splash.png" alt="SMILE — Ensemble, plus loin" fetchpriority="high" decoding="async">
 </div>
 <div id="auth-gate" class="auth-gate">
  <section class="auth-card" aria-labelledby="auth-title">
-  <div class="auth-brand">ORVIA 45</div>
+  <div class="auth-brand">SMILE</div>
   <h2 id="auth-title">Bienvenue</h2>
-  <p class="muted" id="auth-description">Connectez-vous à votre compte ORVIA 45.</p>
+  <p class="muted" id="auth-description">Connectez-vous à votre compte SMILE.</p>
   <form id="user-login-form" class="form-screen">
    <label>Numéro de téléphone ou adresse e-mail</label><input name="login" autocomplete="username" required maxlength="254" placeholder="Téléphone ou e-mail">
    <label>Mot de passe</label><input name="password" type="password" autocomplete="current-password" required minlength="6" maxlength="200" placeholder="6 caractères minimum">
@@ -36,7 +36,7 @@
   <p class="auth-hint">Vous avez déjà un compte ? Choisissez « J’ai déjà un compte » pour vous connecter.</p>
  </section>
 </div>
-<header class="top"><div class="brand">ORVIA 45</div><div class="top-actions"><button id="notice" class="notice-button" aria-label="Notifications" aria-haspopup="dialog"><span aria-hidden="true">♧</span><span id="notice-count" class="notice-count" aria-live="polite" hidden></span></button><button id="language">FR</button></div></header>
+<header class="top"><div class="brand">SMILE</div><div class="top-actions"><button id="notice" aria-label="Notifications">♧</button><button id="language">FR</button></div></header>
 <main>
 <section id="home" class="page active">
   <div class="hero">
@@ -44,11 +44,10 @@
     <div class="balances"><strong id="subscription">0</strong><strong id="earnings">0</strong></div>
     <div class="daily">▣ &nbsp; Activez votre tâche pour collecter votre salaire quotidien</div>
   </div>
-  <div class="banner"><div class="chip-art">S</div><div><small>BIENVENUE SUR</small><h1>ORVIA 45</h1><p>Votre espace personnel</p></div></div>
+  <div class="banner"><div class="chip-art">S</div><div><small>BIENVENUE SUR</small><h1>SMILE</h1><p>Votre espace personnel</p></div></div>
 
-  <button class="orvia-vip-promo" type="button" data-tab="vip" aria-label="Découvrir les niveaux VIP ORVIA 45">
-    <span class="orvia-vip-promo-copy"><small>ORVIA 45 · ESPACE VIP</small><strong>Découvrez les niveaux VIP</strong><span>Voir les avantages <b>→</b></span></span>
-    <span class="orvia-vip-promo-mark" aria-hidden="true">♛</span>
+  <button class="smile-promo-entry" type="button" data-tab="vip" aria-label="Découvrir les offres et l’espace VIP SMILE">
+    <img src="/uploads/smile-vip-banner.png" alt="Bannière SMILE : découvrir les niveaux VIP" loading="lazy">
   </button>
   <div class="quick">
     <button data-action="deposit"><b>＋</b>Dépôt</button><button data-action="withdraw"><b>↗</b>Retrait</button><button data-tab="products"><b>▦</b>Produits</button>
@@ -67,7 +66,7 @@
 <section id="vip" class="page">
   <div class="subhead"><button class="back" data-tab="home">‹</button><span>ESPACE VIP</span><span>👑</span></div>
   <p class="muted vip-intro">Consultez les niveaux VIP, leurs objectifs et les avantages associés.</p>
-  <div class="vip-current panel"><span>Mon niveau actuel</span><strong id="vip-current-level">À déterminer</strong><small>Votre progression dépend des conditions validées par ORVIA 45.</small></div>
+  <div class="vip-current panel"><span>Mon niveau actuel</span><strong id="vip-current-level">À déterminer</strong><small>Votre progression dépend des conditions validées par SMILE.</small></div>
   <div id="vip-levels" class="vip-levels" aria-label="Niveaux VIP"></div>
   <p class="muted vip-disclaimer">Les avantages et rémunérations sont soumis aux conditions officielles et aux validations requises. Les objectifs non communiqués ne sont pas inventés.</p>
 </section>
@@ -85,22 +84,11 @@
 </section>
 <section id="products" class="page"><h2>Produits</h2><p class="muted">Consultez les offres publiées et leurs conditions.</p><div id="all-products" class="products"></div></section>
 <section id="team" class="page"><h2>Gestion d'équipe</h2><article class="panel"><h3>Mon lien d'invitation</h3><p class="muted">Partagez ce lien. Le parrain est associé automatiquement lors de la création du compte.</p><div class="copyline"><input id="invite" readonly><button class="primary" id="copy">Copier</button></div></article><article class="panel"><h3>Mon équipe</h3><p class="muted">Votre équipe est organisée sur trois niveaux. Les récompenses éventuelles sont calculées uniquement après validation administrative du premier investissement d’un filleul.</p></article><article class="panel"><h3>Aperçu des données</h3><div class="stats"><div>Membres d'équipe<strong>0</strong></div><div>Niveau 1<strong>0</strong></div><div>Niveau 2<strong>0</strong></div><div>Niveau 3<strong>0</strong></div></div></article><article class="panel"><h3>Mes filleuls</h3><div id="team-members"><p class="muted">Les membres de votre équipe apparaîtront ici.</p></div></article></section>
-<section id="publications" class="page"><div class="section-title"><h2>Actualités ORVIA 45</h2></div><div class="publication-feed"><article class="empty"><p>Chargement des publications…</p></article></div></section>
+<section id="publications" class="page"><div class="section-title"><h2>Actualités SMILE</h2></div><div class="publication-feed"><article class="empty"><p>Chargement des publications…</p></article></div></section>
 <section id="account" class="page">
-  <div class="profile"><div class="avatar" id="main-avatar">👤</div><div><strong id="username">Utilisateur ORVIA 45</strong><small>ID : <span id="user-id">SM-000001</span></small></div><button class="settings" data-action="settings">⚙</button></div>
+  <div class="profile"><div class="avatar" id="main-avatar">👤</div><div><strong id="username">Utilisateur SMILE</strong><small>ID : <span id="user-id">SM-000001</span></small></div><button class="settings" data-action="settings">⚙</button></div>
   <div class="stats four"><div>Revenu total<strong>0</strong></div><div>Revenu quotidien<strong>0</strong></div><div>Revenu mensuel<strong>0</strong></div><div>Profits total<strong>0</strong></div></div>
-  <div class="account-section-label">Mes espaces et services</div>
-  <div class="account-grid">
-    <button class="account-option account-ai" type="button" data-open-category="ia"><b>✦</b><span>IA</span></button>
-    <button class="account-option" type="button" data-open-category="super"><b>♛</b><span>SUPER IA</span></button>
-    <button class="account-option" type="button" data-open-category="limited"><b>◷</b><span>Temps limité</span></button>
-    <button class="account-option" type="button" data-open-category="daily"><b>▣</b><span>Revenu quotidien</span></button>
-    <button class="account-option" type="button" data-open-category="team"><b>♧</b><span>Produit d'équipe</span></button>
-    <button class="account-option" type="button" data-action="my-products"><b>▤</b><span>Mes produits</span></button>
-    <button class="account-option" type="button" data-action="history"><b>↔</b><span>Historique financier</span></button>
-    <button class="account-option" type="button" data-tab="team"><b>＋</b><span>Inviter des amis</span></button>
-    <button class="account-option" type="button" data-action="support"><b>◉</b><span>Service client</span><i id="user-support-unread-badge" class="user-support-unread-badge" hidden>0</i></button>
-  </div>
+  <div class="account-grid"><button data-action="my-products">▣<span>Mes produits</span></button><button data-action="history">▤<span>Historique financier</span></button><button data-tab="team">♧<span>Rapport d'équipe</span></button><button data-tab="team">＋<span>Inviter des amis</span></button><button data-action="support">◉<span>Service client</span></button></div>
   <div class="menu"><button data-action="settings">⚙ Paramètres <span>›</span></button><button data-action="download">⇩ Télécharger l'APP <span>›</span></button><button data-action="logout">↪ Se déconnecter <span>›</span></button></div>
 </section>
 <section id="settings" class="page"><div class="subhead"><button class="back" data-tab="account">‹</button><span>Paramètres</span><span></span></div><div class="settings-menu"><button data-action="profile"><span>Photo de profil</span><b>›</b></button><button data-action="password"><span>Mot de passe de connexion</span><b>›</b></button><button data-action="wallet"><span>Lier le portefeuille</span><b>›</b></button><button data-action="pin"><span>Mot de passe de retrait</span><b>›</b></button></div></section>

@@ -146,20 +146,3 @@ body{background:#fff;color:#111}.top{display:none}main{max-width:520px;padding:1
 .limited-topbar span{display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:clamp(14px,3.6vw,18px);font-weight:900}
 .limited-topbar b{font-size:clamp(16px,4.2vw,22px);font-weight:950;letter-spacing:.02em}
 @media(max-width:380px){.limited-topbar{font-size:12px}.limited-topbar span{font-size:12px}.limited-topbar b{font-size:15px}}
-
-.orvia-splash-mark{display:flex;flex-direction:column;align-items:center;gap:14px;color:#f0d99e;letter-spacing:3px;font-weight:800}.orvia-splash-mark img{width:112px;height:112px;object-fit:contain}.orvia-splash-mark small{font-size:10px;letter-spacing:2px;color:#cbd5e1}
-
-/* Accès IA et offres depuis le compte utilisateur — grille ORVIA 45 */
-.account-section-label{font-size:13px;font-weight:800;color:#243b5b;margin:18px 2px 9px}
-.account-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
-.account-grid .account-option{min-height:88px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;border:1px solid #e4eaf2;background:#fff;color:#26364f;border-radius:13px;padding:12px 6px;font-size:12px;font-weight:750;box-shadow:0 2px 8px #14213b0b;transition:background .15s,border-color .15s,color .15s}
-.account-grid .account-option b{font-size:22px;line-height:1;color:#1b6598}
-.account-grid .account-option span{font-size:11px;margin:0;text-align:center}
-.account-grid .account-option.active{background:#e8f2ff;border:2px solid #1675d1;color:#0755a5;box-shadow:0 3px 12px #1675d122}
-.account-grid .account-option.active b{color:#075fc1}
-@media(max-width:390px){.account-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-/* Badge des notifications non lues */
-.top-actions .notice-button{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:38px}.notice-count{position:absolute;top:-2px;right:-8px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;line-height:17px;text-align:center;border:1px solid #071a3c}.notice-count[hidden]{display:none}
-
-.user-support-unread-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-style:normal;font-weight:800;line-height:18px}.user-support-unread-badge[hidden]{display:none}

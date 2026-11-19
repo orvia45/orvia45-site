@@ -57,21 +57,3 @@
 
 .limited-product-settings{margin:14px 0;padding:14px;border:1px solid #e8a7c7;border-radius:12px;background:#fff7fb;display:grid;gap:8px}
 .limited-product-settings legend{padding:0 8px;font-weight:800;color:#a12d69}
-
-.admin-device-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}.admin-device-actions button{font-size:13px}@media(max-width:680px){.admin-device-actions{width:100%;justify-content:stretch}.admin-device-actions button{flex:1 1 100%}}
-
-/* Accès direct et toujours visible à la gestion des offres */
-.admin-device-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.admin-offers-shortcut{width:auto;margin:0;padding:10px 14px;white-space:nowrap}@media(max-width:650px){.admin-device-actions{width:100%}.admin-offers-shortcut{flex:1 1 100%;order:-1}.admin-device-actions .outline{flex:1 1 auto}}
-
-/* Badge des nouveaux messages du service client */
-.support-unread-badge{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 6px;border-radius:999px;background:#c62828;color:#fff!important;font-size:11px!important;font-weight:800;margin-left:auto}.support-unread-badge[hidden]{display:none}
-
-.support-alert-settings{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.support-alert-settings button{flex:1 1 210px}
-
-/* Dossier détaillé des membres — affichage adaptatif */
-.user-detail-panel{flex:1 0 100%;width:100%;margin-top:14px;padding:14px;border:1px solid #dce4f0;border-radius:12px;background:#f8faff;box-sizing:border-box;overflow-wrap:anywhere}
-.user-detail-panel h3{margin:4px 0 12px}.user-detail-panel h4{margin:16px 0 8px;color:#17345e}.user-detail-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.user-detail-summary>div{display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #e0e7f1;border-radius:9px;background:#fff;min-width:0}.user-detail-summary small{color:#64748b}.user-detail-summary b{overflow-wrap:anywhere}.user-detail-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.user-detail-list article{padding:10px;border:1px solid #e0e7f1;border-radius:9px;background:#fff;min-width:0}.user-detail-list p{margin:5px 0 0;color:#64748b;font-size:.88rem;overflow-wrap:anywhere}
-@media(max-width:640px){.user-detail-panel{padding:10px}.user-detail-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.user-detail-list{grid-template-columns:1fr}.deposit-actions{flex-wrap:wrap}.deposit-actions button{max-width:100%;white-space:normal}}
-
-/* Alertes financières et rapports quotidiens */
-.finance-alert-module{margin:16px 0}.finance-alert-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e5c7a1;border-left:4px solid #c47a24;border-radius:10px;background:#fffaf3;margin:8px 0}.finance-alert-row p{margin:5px 0 0;color:#64748b;font-size:13px;overflow-wrap:anywhere}.finance-alert-row>strong{white-space:nowrap;color:#9a5414;font-size:12px}@media(max-width:600px){.finance-alert-row{align-items:flex-start;flex-direction:column}.finance-alert-row>strong{white-space:normal}}

@@ -1,15 +1,11 @@
 {
-  "name": "orvia45-platform",
-  "version": "2.2.0",
+  "name": "smile-platform",
+  "version": "1.54.9",
   "private": true,
-  "description": "ORVIA 45 — plateforme intégrée avec gestion des offres, portefeuilles et opérations Mobile Money manuelles",
+  "description": "SMILE - demandes Mobile Money manuelles Flooz/Mixx (TMoney) avec validation administrateur",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
-    "backup:s3": "node scripts/backup-to-s3.js",
-    "backup:validate": "node scripts/validate-backup.js",
-    "restore:prepare-test": "node scripts/prepare-restore-check.js",
-    "restore:test": "node scripts/run-isolated-restore.js"
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

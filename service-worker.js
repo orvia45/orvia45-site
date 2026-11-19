@@ -1,9 +1,10 @@
 'use strict';
-const CACHE_NAME = 'orvia45-shell-v5';
+const CACHE_NAME = 'smile-shell-v1.54.9';
 const APP_SHELL = [
-  '/', '/index.html', '/style.css', '/orvia45-theme.css', '/splash.js', '/app.js',
+  '/', '/index.html', '/style.css', '/splash.js', '/app.js',
   '/support-links.js', '/home-records.js', '/password-toggle.js',
-  '/manifest.webmanifest', '/icons/orvia45-192.png', '/icons/orvia45-512.png'
+  '/manifest.webmanifest', '/icons/smile-192.png', '/icons/smile-512.png',
+  '/uploads/smile-splash.png', '/uploads/smile-vip-banner.png', '/smile-limited-banner.png'
 ];
 
 self.addEventListener('install', event => {
@@ -11,9 +12,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(
-    keys.filter(key => (key.startsWith('smile-shell-') || key.startsWith('orvia45-shell-')) && key !== CACHE_NAME).map(key => caches.delete(key))
-  )).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('smile-shell-') && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', event => {

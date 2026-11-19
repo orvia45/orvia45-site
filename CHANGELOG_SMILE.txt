@@ -1,3 +1,11 @@
+SMILE v1.54.9 — Gestion des numéros de réception Flooz/Mixx
+- Ajout de la rubrique administrateur « Gestion des dépôts ».
+- Un numéro de réception unique et activable/désactivable par opérateur (Flooz et Mixx/TMoney).
+- Affichage du numéro actif choisi dans le formulaire utilisateur.
+- Contrôle serveur du numéro actif avant l’enregistrement d’un dépôt.
+- Archivage du numéro destinataire sur chaque dépôt pour préserver l’historique lors des remplacements.
+- Dépôts toujours soumis à vérification et validation administrative manuelle ; aucune automatisation des retraits.
+
 
 Version 1.54.6 — Ajustements Temps Limité
 - Retrait des quatre montants de réservation de la fiche produit initiale ; choix conservés dans la fenêtre de réservation/souscription et dans l’administration.
