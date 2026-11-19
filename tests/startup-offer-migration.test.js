@@ -18,7 +18,7 @@ test('les réglages initiaux des offres SMILE IA sont protégés par une migrati
 });
 
 test('le README ne présente plus les fonctions actuelles comme de simples démonstrations', () => {
-  assert.match(readme, /Version de travail 2\.0\.0/);
+  assert.match(readme, /État de la version 1\.52\.6/);
   assert.doesNotMatch(readme, /Les dépôts, retraits, achats, soldes et gains affichés restent des démonstrations/);
-  assert.match(readme, /tests automatisés ne remplacent pas une recette fonctionnelle complète/);
+  assert.match(readme, /tests automatisés locaux ne remplacent pas une recette/);
 });

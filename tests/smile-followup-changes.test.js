@@ -43,10 +43,10 @@ test('le formulaire admin exige une confirmation et un motif pour la modificatio
   const adminHtml = fs.readFileSync('admin.html', 'utf8');
   const adminJs = fs.readFileSync('admin.js', 'utf8');
   assert.match(adminHtml, /id="global-quota-form"/);
-  assert.match(adminHtml, /toutes les offres ORVIA 45/);
+  assert.match(adminHtml, /toutes les offres SMILE/);
   assert.match(adminHtml, /name="confirmGlobal"[^>]*required/);
   assert.match(adminHtml, /name="reason" maxlength="300" minlength="3" required/);
-  assert.match(adminJs, /Confirmer la mise à jour de la limite personnelle pour TOUS les utilisateurs, anciens et nouveaux, sur TOUTES les offres ORVIA 45/);
+  assert.match(adminJs, /Confirmer la mise à jour de la limite personnelle pour TOUS les utilisateurs, anciens et nouveaux, sur TOUTES les offres SMILE/);
 });
 
 test('Mixx (TMoney) est le libellé visible sans changer la clé historique tmoney', () => {

@@ -8,7 +8,7 @@ const admin = fs.readFileSync(path.join(root, 'admin.js'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 
 test('une nouvelle offre est créée en brouillon', () => {
-  assert.match(server, /image_url,published,sale_start_at,sale_end_at,reservation_end_at,reservation_amounts_cfa[\s\S]*?false[\s\S]*?RETURNING \*/);
+  assert.match(server, /image_url,published,sale_start_at,sale_end_at,reservation_amounts_cfa[\s\S]*?false[\s\S]*?RETURNING \*/);
 });
 
 test('le catalogue utilisateur affiche les offres actives même en attente de publication', () => {
@@ -64,7 +64,7 @@ test('l’administration permet de prévisualiser le compte utilisateur sans ins
   assert.match(admin, /window\.open\(url,'smile-user-preview'/);
   assert.match(preview, /Consultation libre sans inscription/);
   assert.match(preview, /disabled/);
-  assert.match(preview, /Produits publiés par ORVIA 45/);
+  assert.match(preview, /Produits publiés par SMILE/);
 });
 
 test('les produits en attente sont modifiables depuis la liste admin', () => {
@@ -122,14 +122,13 @@ test('retirer masque l’offre sans supprimer ses données et republier la réac
 
 test('les produits à temps limité ont des dates, des options de réservation et un solde administrables', () => {
   for (const field of ['sale_start_at','sale_end_at','reservation_amounts_cfa','product_wallet_balance_cfa','reservations_remaining']) assert.match(server, new RegExp('ADD COLUMN IF NOT EXISTS '+field));
-  for (const field of ['reservationEndAt','saleStartAt','saleEndAt','reservationAmounts','productWalletBalance','reservationsRemaining']) assert.match(admin, new RegExp(field));
+  for (const field of ['saleStartAt','saleEndAt','reservationAmounts','productWalletBalance','reservationsRemaining']) assert.match(admin, new RegExp(field));
   assert.match(server, /activationAt:startAt/);
   assert.match(server, /Cette offre à temps limité est terminée/);
 });
 
 test('le compte utilisateur affiche un compte à rebours pour les offres programmées et leur fin', () => {
   assert.match(app, /data-limited-countdown/);
-  assert.match(app, /o\.reservation_end_at/);
-  assert.match(app, /Ouverture officielle des ventes dans/);
-  assert.match(app, /Fin des pré-réservations dans/);
+  assert.match(app, /Compte à rebours avant la mise en ligne/);
+  assert.match(app, /Fin de l’offre dans/);
 });
